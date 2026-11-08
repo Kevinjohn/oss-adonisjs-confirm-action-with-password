@@ -132,6 +132,13 @@ export default class extends BaseSchema {
   return { root, ignitor, importer }
 }
 
+/** The error code a call rejects with, or 'resolved'. */
+export const codeOf = (promise: Promise<unknown>) =>
+  promise.then(
+    () => 'resolved',
+    (error) => (error.code as string) ?? String(error)
+  )
+
 /** A guard port standing in for the session guard: `establish` returns what a cookie session holds. */
 export function fakeSessionGuard() {
   return {

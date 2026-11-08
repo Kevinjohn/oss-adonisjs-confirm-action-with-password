@@ -10,6 +10,7 @@
 import { readdir } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import type Configure from '@adonisjs/core/commands/configure'
+import { isSqlIdentifier } from './src/sql_identifier.js'
 
 /** The package's stub directory, next to this file in source and in `build/`. */
 export const stubsRoot = fileURLToPath(new URL('./stubs/', import.meta.url))
@@ -30,8 +31,7 @@ export async function configure(command: Configure) {
   const usersTable = String(command.parsedFlags['users-table'] ?? 'users')
   const userIdType = String(command.parsedFlags['user-id-type'] ?? 'integer')
   const tableName = String(command.parsedFlags['table'] ?? 'password_confirmations')
-  const identifier = /^[A-Za-z_][A-Za-z0-9_]*$/
-  if (!identifier.test(usersTable) || !identifier.test(tableName) || !userIdColumns[userIdType]) {
+  if (!isSqlIdentifier(usersTable) || !isSqlIdentifier(tableName) || !userIdColumns[userIdType]) {
     command.exitCode = 1
     command.logger.logError(
       'password_confirmations: --users-table and --table must be plain SQL identifiers and --user-id-type integer, string or uuid'

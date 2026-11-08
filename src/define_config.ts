@@ -9,9 +9,8 @@
 
 import string from '@adonisjs/core/helpers/string'
 import { InvalidPasswordConfirmationsConfigException } from './errors.js'
+import { isSqlIdentifier } from './sql_identifier.js'
 import type { PasswordConfirmationsConfig, ResolvedPasswordConfirmationsConfig } from './types.js'
-
-const identifier = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 function resolveThrottle(throttle: PasswordConfirmationsConfig['throttle']) {
   if (throttle === false) return false
@@ -43,7 +42,7 @@ export function defineConfig(
     ['table', table],
     ['usersTable', usersTable],
   ]) {
-    if (!identifier.test(value)) {
+    if (!isSqlIdentifier(value)) {
       throw new InvalidPasswordConfirmationsConfigException(
         `${name} must be a plain SQL identifier`
       )

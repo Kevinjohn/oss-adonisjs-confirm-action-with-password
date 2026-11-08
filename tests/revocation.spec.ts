@@ -10,7 +10,7 @@
 import { test } from '@japa/runner'
 import type { CurrentAccountInput } from '@kevinjohn/adonisjs-account-kit/types'
 import type { Fixture } from './helpers.js'
-import { bootFixture, fakeSessionGuard } from './helpers.js'
+import { bootFixture, codeOf, fakeSessionGuard } from './helpers.js'
 
 const PW = 'pw-one-Original-7'
 const PW2 = 'Correct-Horse-9-battery'
@@ -119,12 +119,6 @@ async function account(): Promise<Account> {
   return { email, input: await fixture.login(email, PW), other: await fixture.login(email, PW) }
 }
 
-const outcome = (promise: Promise<unknown>) =>
-  promise.then(
-    () => 'resolved',
-    (error) => (error.code as string) ?? String(error)
-  )
-
 test.group('Revocation: every Account Kit path kills outstanding confirmations', (group) => {
   group.setup(async () => {
     fixture = await bootFixture()
@@ -149,7 +143,7 @@ test.group('Revocation: every Account Kit path kills outstanding confirmations',
             await trx.table('effects').insert({ label: `${name}: must not happen` })
           }
         )
-        assert.include(DEAD, await outcome(spent))
+        assert.include(DEAD, await codeOf(spent))
       }
       const effects = await fixture.db.from('effects').where('label', `${name}: must not happen`)
       assert.lengthOf(effects, 0)
@@ -219,7 +213,7 @@ test.group('Revocation: every Account Kit path kills outstanding confirmations',
       for (const input of afterwards) {
         assert.include(
           DEAD,
-          await outcome(
+          await codeOf(
             confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {})
           )
         )

@@ -45,12 +45,6 @@ export interface PasswordConfirmationsDependencies {
   now?: () => number
 }
 
-/**
- * A confirmation issued with a null credential revision remains valid while the live revision is null.
- * A null revision never matches a non-null revision.
- */
-const NULL_REVISION_MATCHES = true
-
 function affected(result: unknown) {
   return Array.isArray(result) ? Number(result[0]) : Number(result)
 }
@@ -251,9 +245,10 @@ export class PasswordConfirmations {
       })
       .whereNull('consumed_at')
       .where('verified_at', '>', now - this.#config.windowMs)
-    if (revision !== null) query.where('credential_revision', revision)
-    else if (NULL_REVISION_MATCHES) query.whereNull('credential_revision')
-    else throw new PasswordConfirmationRequiredException()
+    // A confirmation issued before any credential change stays valid while none has happened;
+    // null never matches a non-null revision.
+    if (revision === null) query.whereNull('credential_revision')
+    else query.where('credential_revision', revision)
     if (affected(await query.update({ consumed_at: now })) !== 1) {
       throw new PasswordConfirmationRequiredException()
     }

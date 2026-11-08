@@ -9,7 +9,7 @@
 
 import { test } from '@japa/runner'
 import type { Fixture } from './helpers.js'
-import { bootFixture } from './helpers.js'
+import { bootFixture, codeOf } from './helpers.js'
 
 const PW = 'pw-one-Original-7'
 const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
@@ -21,11 +21,6 @@ async function signedIn() {
   await fixture.createUser(email, PW)
   return { email, input: await fixture.login(email, PW) }
 }
-const codeOf = (promise: Promise<unknown>) =>
-  promise.then(
-    () => 'resolved',
-    (error) => error.code as string
-  )
 
 test.group('Wrong-password throttling', (group) => {
   group.setup(async () => {

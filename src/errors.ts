@@ -13,35 +13,23 @@ import { Exception } from '@adonisjs/core/exceptions'
 export class PasswordConfirmationRequiredException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_REQUIRED'
   static status = 403
-  constructor() {
-    super('Confirm this action again.', {
-      code: PasswordConfirmationRequiredException.code,
-      status: PasswordConfirmationRequiredException.status,
-    })
-  }
+  static message = 'Confirm this action again.'
 }
 
 /** The password did not match. It already counts against the built-in per-account throttle. */
 export class PasswordConfirmationDeniedException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_DENIED'
   static status = 403
-  constructor() {
-    super('Incorrect password.', {
-      code: PasswordConfirmationDeniedException.code,
-      status: PasswordConfirmationDeniedException.status,
-    })
-  }
+  static message = 'Incorrect password.'
 }
 
 /** Too many wrong passwords for this account; retry after `retryAfterSeconds`. */
 export class PasswordConfirmationThrottledException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_THROTTLED'
   static status = 429
+  static message = 'Too many attempts. Try again later.'
   constructor(readonly retryAfterSeconds: number) {
-    super('Too many attempts. Try again later.', {
-      code: PasswordConfirmationThrottledException.code,
-      status: PasswordConfirmationThrottledException.status,
-    })
+    super()
   }
 }
 
@@ -49,24 +37,14 @@ export class PasswordConfirmationThrottledException extends Exception {
 export class PasswordConfirmationStaleException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_STALE'
   static status = 403
-  constructor() {
-    super('Confirm this action again.', {
-      code: PasswordConfirmationStaleException.code,
-      status: PasswordConfirmationStaleException.status,
-    })
-  }
+  static message = 'Confirm this action again.'
 }
 
 /** Host policy (`authorize`) refused the action. */
 export class PasswordConfirmationForbiddenException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_FORBIDDEN'
   static status = 403
-  constructor() {
-    super('This action is not allowed.', {
-      code: PasswordConfirmationForbiddenException.code,
-      status: PasswordConfirmationForbiddenException.status,
-    })
-  }
+  static message = 'This action is not allowed.'
 }
 
 /** `action`, `scope` or `intent` is malformed. */
@@ -74,10 +52,7 @@ export class InvalidPasswordConfirmationRequestException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_INVALID_REQUEST'
   static status = 400
   constructor(reason: string) {
-    super(`Invalid password confirmation request: ${reason}`, {
-      code: InvalidPasswordConfirmationRequestException.code,
-      status: InvalidPasswordConfirmationRequestException.status,
-    })
+    super(`Invalid password confirmation request: ${reason}`)
   }
 }
 
@@ -88,15 +63,8 @@ export class InvalidPasswordConfirmationRequestException extends Exception {
 export class SessionRegistryRequiredException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED'
   static status = 500
-  constructor() {
-    super(
-      'Password confirmations need Account Kit session login with sessionManagement enabled (no signInId).',
-      {
-        code: SessionRegistryRequiredException.code,
-        status: SessionRegistryRequiredException.status,
-      }
-    )
-  }
+  static message =
+    'Password confirmations need Account Kit session login with sessionManagement enabled (no signInId).'
 }
 
 /** `config/password_confirmations.ts` is missing or invalid. */
@@ -104,10 +72,7 @@ export class InvalidPasswordConfirmationsConfigException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_INVALID_CONFIG'
   static status = 500
   constructor(reason: string) {
-    super(`Invalid config/password_confirmations.ts: ${reason}`, {
-      code: InvalidPasswordConfirmationsConfigException.code,
-      status: InvalidPasswordConfirmationsConfigException.status,
-    })
+    super(`Invalid config/password_confirmations.ts: ${reason}`)
   }
 }
 

@@ -10,7 +10,7 @@
 import { randomUUID } from 'node:crypto'
 import { test } from '@japa/runner'
 import type { Fixture } from './helpers.js'
-import { bootFixture, fakeSessionGuard } from './helpers.js'
+import { bootFixture, codeOf, fakeSessionGuard } from './helpers.js'
 import type { ConfirmationRequest } from '../src/types.js'
 
 const PW = 'pw-one-Original-7'
@@ -28,11 +28,6 @@ async function signedIn() {
   await fixture.createUser(email, PW)
   return { email, input: await fixture.login(email, PW) }
 }
-const codeOf = (promise: Promise<unknown>) =>
-  promise.then(
-    () => 'resolved',
-    (error) => error.code as string
-  )
 
 test.group('PasswordConfirmations lifecycle on Account Kit 0.3.2', (group) => {
   group.setup(async () => {
