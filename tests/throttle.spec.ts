@@ -198,4 +198,51 @@ test.group('Wrong-password throttling', (group) => {
       'resolved'
     )
   })
+
+  test('a throttled retry during the block never extends it', async ({ assert }) => {
+    const hash = await fixture.app.container.make('hash')
+    const wrongGate = Promise.withResolvers<void>()
+    const faultGate = Promise.withResolvers<void>()
+    let fault = true
+    const confirmations = fixture.confirmations({
+      throttle: { requests: 2, duration: '1s', blockDuration: '2s' },
+      verifyPassword: async (hashed, password) => {
+        if (fault) {
+          fault = false
+          await faultGate.promise
+          throw new Error('hash backend down')
+        }
+        await wrongGate.promise
+        return hash.verify(hashed, password)
+      },
+    })
+    const { input } = await signedIn()
+    // Two attempts hold the whole budget. The wrong one finishes first and blocks for 2 s; the
+    // faulting one is refunded afterwards, so the count sits exactly at the limit while blocked.
+    const faulting = confirmations
+      .confirmPassword(input, { ...request, password: PW })
+      .catch((e) => e)
+    const wrong = confirmations
+      .confirmPassword(input, { ...request, password: 'nope' })
+      .catch((e) => e)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    wrongGate.resolve()
+    const denied = await wrong
+    assert.equal(denied.code, 'E_PASSWORD_CONFIRMATION_DENIED')
+    const blockedAt = Date.now()
+    faultGate.resolve()
+    const faulted = await faulting
+    assert.equal(faulted.message, 'hash backend down')
+    // A retry inside the block is refused and must not restart the 2 s clock.
+    await new Promise((resolve) => setTimeout(resolve, 1_300))
+    assert.equal(
+      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      'E_PASSWORD_CONFIRMATION_THROTTLED'
+    )
+    await new Promise((resolve) => setTimeout(resolve, blockedAt + 2_500 - Date.now()))
+    assert.equal(
+      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      'resolved'
+    )
+  })
 })

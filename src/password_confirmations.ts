@@ -81,7 +81,13 @@ export class PasswordConfirmations {
           'throttle needs @adonisjs/limiter; register its provider or set throttle: false'
         )
       }
-      this.#throttle = deps.limiter.use(throttle)
+      // No blockDuration here: the store would block again each time a throttled retry crosses the
+      // limit, extending the block for as long as the user keeps trying. #blockWhenSpent is the only
+      // place a block starts, after a wrong password.
+      this.#throttle = deps.limiter.use({
+        requests: throttle.requests,
+        duration: throttle.duration,
+      })
     }
   }
 
