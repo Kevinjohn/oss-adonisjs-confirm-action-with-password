@@ -4,7 +4,7 @@
 
 ## 0.1.0 - 2026-11-08
 
-First release, for Account Kit 0.3.2 exactly.
+First release, for Account Kit 0.3.3 exactly.
 
 - `confirmPassword()` checks the current password and issues a single-use confirmation. The hash
   runs outside the Kit account lock.

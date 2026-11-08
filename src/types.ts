@@ -9,7 +9,7 @@
 
 import type { Trx, UserId, CurrentAccount } from '@kevinjohn/adonisjs-account-kit/types'
 
-/** What `authentication.withCurrent` hands its callback in Account Kit 0.3.2. */
+/** What `authentication.withCurrent` hands its callback in Account Kit 0.3.3. */
 export interface KitContext {
   account: CurrentAccount
   signInId?: number
