@@ -30,23 +30,30 @@ test.group('provider and service', () => {
     }
   }).timeout(30_000)
 
-  test('a missing config/password_confirmations.ts is a configuration error', async ({
-    assert,
-  }) => {
+  /** Registers the provider on a bare container with the given config and no limiter binding. */
+  function registerWithout(config: unknown) {
     const bindings = new Map<unknown, (resolver: unknown) => Promise<unknown>>()
     const app = {
-      config: { get: () => undefined },
+      config: { get: () => config },
       container: {
         singleton: (key: unknown, factory: (resolver: unknown) => Promise<unknown>) =>
           bindings.set(key, factory),
         alias: () => {},
+        hasBinding: () => false,
       },
     }
     new PasswordConfirmationsProvider(app as never).register()
-    await assert.rejects(
-      () => bindings.get(PasswordConfirmations)!({ make: async () => ({}) }),
-      /Invalid config\/password_confirmations.ts/
-    )
+    return () => bindings.get(PasswordConfirmations)!({ make: async () => ({}) })
+  }
+
+  test('a missing config/password_confirmations.ts is a configuration error', async ({
+    assert,
+  }) => {
+    await assert.rejects(registerWithout(undefined), /Invalid config\/password_confirmations.ts/)
+  })
+
+  test('throttling without the limiter provider is a configuration error', async ({ assert }) => {
+    await assert.rejects(registerWithout(defineConfig()), /throttle needs @adonisjs\/limiter/)
   })
 
   test('throttling without a limiter is a configuration error', async ({ assert }) => {

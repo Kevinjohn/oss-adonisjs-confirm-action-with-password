@@ -32,7 +32,11 @@ export default class PasswordConfirmationsProvider {
         throw new InvalidPasswordConfirmationsConfigException('export default defineConfig({...})')
       }
       const hash = await resolver.make('hash')
-      const limiter = config.throttle ? await resolver.make('limiter.manager') : undefined
+      // Without the limiter provider, let the constructor explain the throttle requirement.
+      const limiter =
+        config.throttle && this.app.container.hasBinding('limiter.manager')
+          ? await resolver.make('limiter.manager')
+          : undefined
       return new PasswordConfirmations({
         limiter,
         kit: await resolver.make(AccountKit),

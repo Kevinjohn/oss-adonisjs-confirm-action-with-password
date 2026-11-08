@@ -62,7 +62,7 @@ export async function configure(command: Configure) {
     await codemods.makeUsingStub(stubsRoot, 'migrations/create_password_confirmations_table.stub', {
       migration: {
         tableName,
-        usersTable: JSON.stringify(usersTable),
+        usersTable,
         userIdColumn: userIdColumns[userIdType],
         destination: command.app.makePath(`database/migrations/${Date.now()}${suffix}`),
       },

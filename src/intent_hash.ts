@@ -43,7 +43,7 @@ function canonical(value: unknown, depth = 0): string {
         'intent must contain plain JSON values only'
       )
     }
-    const keys = Object.keys(value).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+    const keys = Object.keys(value).sort()
     const record = value as Record<string, unknown>
     return `{${keys.map((key) => `${JSON.stringify(key)}:${canonical(record[key], depth + 1)}`).join(',')}}`
   }

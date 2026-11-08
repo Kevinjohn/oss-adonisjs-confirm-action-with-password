@@ -25,7 +25,10 @@ test.group('configure', () => {
       assert.lengthOf(await migrations(), 1)
       const [migrationFile] = await migrations()
       const migration = await readFile(join(root, 'database/migrations', migrationFile), 'utf8')
-      assert.include(migration, `table.integer('user_id').unsigned()`)
+      assert.include(
+        migration,
+        `table.integer('user_id').unsigned().notNullable().references('id').inTable('users')`
+      )
       assert.include(migration, `.inTable('account_sessions').onDelete('CASCADE')`)
       assert.include(migration, `protected tableName = 'password_confirmations'`)
       assert.include(migration, `table.index(['user_id'])`)
