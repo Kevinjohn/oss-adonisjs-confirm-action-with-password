@@ -35,7 +35,10 @@ function canonical(value: unknown, depth = 0): string {
     }
     return JSON.stringify(value)
   }
-  if (Array.isArray(value)) return `[${value.map((item) => canonical(item, depth + 1)).join(',')}]`
+  // Array.from visits holes as undefined, so a sparse array is refused like any other non-JSON value.
+  if (Array.isArray(value)) {
+    return `[${Array.from(value, (item) => canonical(item, depth + 1)).join(',')}]`
+  }
   if (typeof value === 'object') {
     const prototype = Object.getPrototypeOf(value)
     if (prototype !== Object.prototype && prototype !== null) {

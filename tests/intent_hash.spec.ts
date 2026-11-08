@@ -51,6 +51,8 @@ test.group('bindRequest', () => {
       { u: undefined },
       undefined,
       { big: 1n },
+      Array(1),
+      Object.assign(Array(3), [1], { 2: 3 }),
     ]) {
       assert.throws(() => hashOf(intent), /Invalid password confirmation request/)
     }

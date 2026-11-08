@@ -7,7 +7,7 @@
  * file that was distributed with this source code.
  */
 
-import { readdir, readFile, rm } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from '@japa/runner'
 import { configuredAppRoot } from './helpers.js'
@@ -51,7 +51,9 @@ test.group('configure', () => {
     }
   }).timeout(30_000)
 
-  test('--table names the migration table and the config together', async ({ assert }) => {
+  test('--table and --users-table name the migration tables and the config together', async ({
+    assert,
+  }) => {
     const { root, ignitor } = await configuredAppRoot()
     try {
       await rm(join(root, 'database/migrations'), { recursive: true })
@@ -62,16 +64,15 @@ test.group('configure', () => {
           'configure',
           '@kevinjohn/adonisjs-confirm-action-with-password',
           '--table=sensitive_confirmations',
+          '--users-table=members',
         ])
       const [file] = await readdir(join(root, 'database/migrations'))
-      assert.include(
-        await readFile(join(root, 'database/migrations', file), 'utf8'),
-        `protected tableName = 'sensitive_confirmations'`
-      )
-      assert.include(
-        await readFile(join(root, 'config/password_confirmations.ts'), 'utf8'),
-        `table: 'sensitive_confirmations'`
-      )
+      const migration = await readFile(join(root, 'database/migrations', file), 'utf8')
+      assert.include(migration, `protected tableName = 'sensitive_confirmations'`)
+      assert.include(migration, `.inTable('members')`)
+      const config = await readFile(join(root, 'config/password_confirmations.ts'), 'utf8')
+      assert.include(config, `table: 'sensitive_confirmations'`)
+      assert.include(config, `usersTable: 'members'`)
     } finally {
       await rm(root, { recursive: true, force: true })
     }
@@ -95,6 +96,26 @@ test.group('configure', () => {
       await rm(root, { recursive: true, force: true })
     }
     assert.match(written.join(''), /configure @kevinjohn\/adonisjs-account-kit first/)
+  }).timeout(30_000)
+
+  test('the migration sorts after an Account Kit migration dated ahead of the clock', async ({
+    assert,
+  }) => {
+    const { root, ignitor } = await configuredAppRoot()
+    try {
+      const migrations = join(root, 'database/migrations')
+      await rm(migrations, { recursive: true })
+      await rm(join(root, 'config/password_confirmations.ts'))
+      const ahead = Date.now() + 60 * 60_000
+      await mkdir(migrations)
+      await writeFile(join(migrations, `${ahead}_account_kit_create_account_sessions.ts`), '')
+      await ignitor.ace().handle(['configure', '@kevinjohn/adonisjs-confirm-action-with-password'])
+      const files = await readdir(migrations)
+      const file = files.find((name) => name.endsWith('_create_password_confirmations_table.ts'))!
+      assert.isAbove(Number.parseInt(file, 10), ahead)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   }).timeout(30_000)
 
   test('honours --user-id-type and refuses bad flags', async ({ assert }) => {
@@ -121,6 +142,17 @@ test.group('configure', () => {
         ])
       assert.equal(process.exitCode, 1)
       process.exitCode = undefined
+      // An inherited Object key is not a user id type; nothing is written.
+      await ignitor
+        .ace()
+        .handle([
+          'configure',
+          '@kevinjohn/adonisjs-confirm-action-with-password',
+          '--user-id-type=constructor',
+        ])
+      assert.equal(process.exitCode, 1)
+      process.exitCode = undefined
+      assert.lengthOf(await readdir(join(root, 'database/migrations')), 1)
       // A bad --table is refused too, and writes nothing.
       await rm(join(root, 'database/migrations'), { recursive: true })
       await rm(join(root, 'config/password_confirmations.ts'))

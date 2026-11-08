@@ -111,12 +111,17 @@ export class PasswordConfirmations {
     }
   }
 
-  /** After a wrong password, block for `blockDuration` once the budget is used up. */
+  /**
+   * After a wrong password, block for `blockDuration` once the budget is used up. The count is
+   * kept, not reset to limit + 1 as `block()` would: attempts rejected while the budget was full
+   * still owe their refund, and a reset count minus those refunds would open the block again.
+   */
   async #blockWhenSpent(key: string) {
     const throttle = this.#config.throttle
     const response = await this.#throttle!.get(key)
     if (throttle && response && response.consumed >= response.limit) {
-      await this.#throttle!.block(key, throttle.blockDuration)
+      const blocked = Math.max(response.consumed, response.limit + 1)
+      await this.#throttle!.set(key, blocked, throttle.blockDuration)
     }
   }
 
@@ -173,8 +178,9 @@ export class PasswordConfirmations {
       if (this.#throttle) await this.#blockWhenSpent(throttleKey)
       throw new PasswordConfirmationDeniedException()
     }
-    if (this.#throttle) await this.#throttle.delete(throttleKey)
+    // The window runs from the check itself, not from the limiter reset that follows it.
     const verifiedAt = this.#now()
+    if (this.#throttle) await this.#throttle.delete(throttleKey)
 
     return this.#kit.authentication.withCurrent(input, async (context) => {
       const signInId = this.#signInId(context)

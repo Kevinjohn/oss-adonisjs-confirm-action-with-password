@@ -8,6 +8,10 @@
  */
 
 import { test } from '@japa/runner'
+import type { Limiter } from '@adonisjs/limiter'
+import { PasswordConfirmations } from '../src/password_confirmations.js'
+import { defineConfig } from '../src/define_config.js'
+import type { ConfirmationThrottle, PasswordConfirmationsConfig } from '../src/types.js'
 import type { Fixture } from './helpers.js'
 import { bootFixture, codeOf } from './helpers.js'
 
@@ -22,12 +26,109 @@ async function signedIn() {
   return { email, input: await fixture.login(email, PW) }
 }
 
+/**
+ * A PasswordConfirmations on the fixture whose limiter calls can be held: `hold[name]` makes every
+ * `name` call wait until it is resolved, to pin an ordering the real store only reaches by chance.
+ */
+async function withHeldLimiter(
+  config: PasswordConfirmationsConfig,
+  hold: Partial<Record<'decrement' | 'delete', Promise<void>>>
+) {
+  const manager = await fixture.app.container.make('limiter.manager')
+  const hash = await fixture.app.container.make('hash')
+  const held = (limiter: Limiter): Limiter =>
+    new Proxy(limiter, {
+      get(target, property, receiver) {
+        const value = Reflect.get(target, property, receiver)
+        const gate = hold[property as keyof typeof hold]
+        if (typeof value !== 'function' || !gate) {
+          return typeof value === 'function' ? value.bind(target) : value
+        }
+        return async (...args: unknown[]) => {
+          await gate
+          return value.apply(target, args)
+        }
+      },
+    })
+  return new PasswordConfirmations({
+    kit: fixture.kit,
+    db: fixture.db,
+    limiter: {
+      use: ((options: ConfirmationThrottle) =>
+        held(manager.use(options))) as unknown as typeof manager.use,
+    },
+    config: defineConfig(config),
+    verifyPassword: (hashed, password) => hash.verify(hashed, password),
+    now: () => fixture.clock.now,
+  })
+}
+
 test.group('Wrong-password throttling', (group) => {
   group.setup(async () => {
     fixture = await bootFixture()
     return () => fixture.close()
   })
+  group.each.setup(() => {
+    fixture.clock.now = Date.now()
+  })
   group.each.timeout(60_000)
+
+  test('refunds of attempts rejected while the budget was full cannot reopen the block', async ({
+    assert,
+  }) => {
+    const refunds = Promise.withResolvers<void>()
+    const hashGate = Promise.withResolvers<void>()
+    const hash = await fixture.app.container.make('hash')
+    const confirmations = await withHeldLimiter(
+      {
+        throttle: { requests: 2, duration: '1 minute', blockDuration: '20 minutes' },
+        verifyPassword: async (hashed, password) => {
+          await hashGate.promise
+          return hash.verify(hashed, password)
+        },
+      },
+      { decrement: refunds.promise }
+    )
+    const { input } = await signedIn()
+    // Two wrong attempts hold the budget while two more are rejected; their refunds are delayed
+    // until after the wrong passwords have blocked the account.
+    const wrong = [1, 2].map(() =>
+      codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' }))
+    )
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    const rejected = [1, 2].map(() =>
+      codeOf(confirmations.confirmPassword(input, { ...request, password: PW }))
+    )
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    hashGate.resolve()
+    assert.deepEqual(await Promise.all(wrong), [
+      'E_PASSWORD_CONFIRMATION_DENIED',
+      'E_PASSWORD_CONFIRMATION_DENIED',
+    ])
+    refunds.resolve()
+    assert.deepEqual(await Promise.all(rejected), [
+      'E_PASSWORD_CONFIRMATION_THROTTLED',
+      'E_PASSWORD_CONFIRMATION_THROTTLED',
+    ])
+    assert.equal(
+      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      'E_PASSWORD_CONFIRMATION_THROTTLED'
+    )
+  })
+
+  test('the window runs from the password check, not from the limiter reset after it', async ({
+    assert,
+  }) => {
+    const reset = Promise.withResolvers<void>()
+    const confirmations = await withHeldLimiter({ window: '2m' }, { delete: reset.promise })
+    const { input } = await signedIn()
+    const issuing = codeOf(confirmations.confirmPassword(input, { ...request, password: PW }))
+    await new Promise((resolve) => setTimeout(resolve, 300))
+    // The limiter reset stalls for the whole window after the password was checked.
+    fixture.clock.now += 2 * 60_000
+    reset.resolve()
+    assert.equal(await issuing, 'E_PASSWORD_CONFIRMATION_STALE')
+  })
 
   test('a parallel burst verifies at most the budget, right password included', async ({
     assert,

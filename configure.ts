@@ -31,7 +31,11 @@ export async function configure(command: Configure) {
   const usersTable = String(command.parsedFlags['users-table'] ?? 'users')
   const userIdType = String(command.parsedFlags['user-id-type'] ?? 'integer')
   const tableName = String(command.parsedFlags['table'] ?? 'password_confirmations')
-  if (!isSqlIdentifier(usersTable) || !isSqlIdentifier(tableName) || !userIdColumns[userIdType]) {
+  if (
+    !isSqlIdentifier(usersTable) ||
+    !isSqlIdentifier(tableName) ||
+    !Object.hasOwn(userIdColumns, userIdType)
+  ) {
     command.exitCode = 1
     command.logger.logError(
       'password_confirmations: --users-table and --table must be plain SQL identifiers and --user-id-type integer, string or uuid'
@@ -40,7 +44,10 @@ export async function configure(command: Configure) {
   }
   const codemods = await command.createCodemods()
   codemods.overwriteExisting = false
-  await codemods.makeUsingStub(stubsRoot, 'config/password_confirmations.stub', { tableName })
+  await codemods.makeUsingStub(stubsRoot, 'config/password_confirmations.stub', {
+    tableName,
+    usersTable,
+  })
 
   const suffix = '_create_password_confirmations_table.ts'
   let existing: string[] = []
@@ -59,12 +66,15 @@ export async function configure(command: Configure) {
   if (existing.some((file) => file.endsWith(suffix))) {
     command.logger.info(`Skipped database/migrations/*${suffix}`)
   } else {
+    // Sort after every existing migration even when one carries a timestamp ahead of this clock.
+    const newest = Math.max(...existing.map((file) => Number.parseInt(file, 10) || 0))
+    const prefix = Math.max(Date.now(), newest + 1)
     await codemods.makeUsingStub(stubsRoot, 'migrations/create_password_confirmations_table.stub', {
       migration: {
         tableName,
         usersTable,
         userIdColumn: userIdColumns[userIdType],
-        destination: command.app.makePath(`database/migrations/${Date.now()}${suffix}`),
+        destination: command.app.makePath(`database/migrations/${prefix}${suffix}`),
       },
     })
   }
