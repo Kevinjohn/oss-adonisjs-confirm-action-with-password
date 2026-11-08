@@ -38,7 +38,7 @@ const isEslintIgnored = (path: string) => /^(stubs|examples|tmp)\//.test(path)
 const isLintable = (path: string) =>
   (/\.[cm]?[jt]sx?$/.test(path) && !isEslintIgnored(path)) || dependencyFiles.includes(path)
 
-/** Files that cannot change the built package. Specs also read docs, workflows and examples. */
+/** Files that cannot change the built package: specs, workflows, docs, examples and root Markdown. */
 function outsidePackage(path: string): boolean {
   return /^(docs|examples|tests|\.github)\//.test(path) || /^[^/]+\.md$/.test(path)
 }
