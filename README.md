@@ -16,7 +16,7 @@ authorizes.
 | Need          | Detail                                                                                                                               |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Node.js       | 24 or later                                                                                                                          |
-| Account Kit   | exactly `0.3.3`; the package reads three Kit storage details (see below)                                                             |
+| Account Kit   | exactly `0.3.4`; the package reads three Kit storage details (see below)                                                             |
 | Login         | Account Kit `authentication.strategy: 'session'` with `sessionManagement` enabled; access tokens give no sign-in row and are refused |
 | Session store | server-side (memory in tests, database or Redis); the cookie store keeps a copied session alive after logout                         |
 | Database      | SQLite (tested). PostgreSQL is expected to work but is untested                                                                      |
@@ -102,7 +102,7 @@ Schedule `passwordConfirmations.prune()` to delete spent and expired rows.
 
 ## Account Kit storage this package reads
 
-Account Kit 0.3.3 has no public API for these, so the package reads them directly. That is why it
+Account Kit 0.3.4 has no public API for these, so the package reads them directly. That is why it
 pins the Kit exactly. `tests/kit_coupling.spec.ts` fails with `KIT COUPLING:` if any of them
 changes.
 
@@ -128,7 +128,7 @@ Account Kit's `E_ACCOUNT_KIT_INVALID_SESSION` passes through unchanged: sign the
 
 ## What ends a confirmation
 
-Every Account Kit 0.3.3 path below is tested to kill an outstanding confirmation, and a spend already in
+Every Account Kit 0.3.4 path below is tested to kill an outstanding confirmation, and a spend already in
 progress commits before the revocation acquires its connection in the single-connection SQLite fixture:
 password change (keeping or ending this sign-in), password reset, logout, `sessions.revoke`,
 `revokeOthers`, `revokeAll`, `changeRestriction`, a completed email change, account deletion,

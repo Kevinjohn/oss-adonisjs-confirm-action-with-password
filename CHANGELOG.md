@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.1.1 - 2026-11-10
+
+- Require Account Kit `0.3.4` exactly. Account Kit 0.3.4 changes only its examples and tooling, so
+  the three Kit storage details this package reads are unchanged.
+
 ## 0.1.0 - 2026-11-08
 
 First release, for Account Kit 0.3.3 exactly.
