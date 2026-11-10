@@ -1,7 +1,7 @@
 {
   "name": "@kevinjohn/adonisjs-confirm-action-with-password",
   "description": "Ask for the password again before a sensitive action, in AdonisJS apps on Account Kit",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "engines": {
     "node": ">=24.0.0"
   },
@@ -92,7 +92,7 @@
     "@japa/assert": "^4.2.0",
     "@japa/expect-type": "^2.0.4",
     "@japa/runner": "^5.3.0",
-    "@kevinjohn/adonisjs-account-kit": "https://github.com/Kevinjohn/oss-adonisjs-account-kit/releases/download/v0.3.3/kevinjohn-adonisjs-account-kit-0.3.3.tgz",
+    "@kevinjohn/adonisjs-account-kit": "https://github.com/Kevinjohn/oss-adonisjs-account-kit/releases/download/v0.3.4/kevinjohn-adonisjs-account-kit-0.3.4.tgz",
     "@poppinss/ts-exec": "^1.5.1",
     "@types/luxon": "^3.0.0",
     "@types/node": "^24.0.0",
@@ -110,7 +110,7 @@
     "@adonisjs/limiter": "^3.0.0",
     "@adonisjs/lucid": "^22.4.2",
     "@adonisjs/session": "^8.1.0",
-    "@kevinjohn/adonisjs-account-kit": "0.3.3",
+    "@kevinjohn/adonisjs-account-kit": "0.3.4",
     "@vinejs/vine": "^4.4.0",
     "typescript": "^5.9.3 || ^6.0.3"
   },

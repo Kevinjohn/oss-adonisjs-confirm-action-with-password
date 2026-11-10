@@ -13,7 +13,7 @@ import { PasswordConfirmationRequiredException } from './errors.js'
 
 /**
  * The account's live credential revision, read through the Kit transaction that holds the account
- * lock. Account Kit 0.3.3 stores it in `credentials_changed_at` and advances it on every password
+ * lock. Account Kit 0.3.4 stores it in `credentials_changed_at` and advances it on every password
  * change, reset and restriction change; `null` means no credential change has happened yet. This is
  * a Kit storage detail the package reads, which is why the Kit is pinned to an exact version.
  */
