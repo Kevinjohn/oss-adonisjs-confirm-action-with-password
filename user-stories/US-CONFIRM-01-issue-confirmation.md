@@ -20,7 +20,7 @@ As a signed-in account holder, I want to confirm my password for a named sensiti
 
 ```mermaid
 flowchart TD
-    A["Host presents action and password form"] --> B["Account holder submits"]
+    A["Host receives a password-confirmation request for an action"] --> B["Host validates account-holder input"]
     B --> C{"Host origin check passes?"}
     C -->|No| D["Host rejects request; no service call"]
     C -->|Yes| E["Host calls confirmPassword"]
@@ -39,10 +39,12 @@ flowchart TD
     B --> C["withCurrent stage 1; authorize; read hash"]
     C --> D["reserve limiter attempt"]
     D --> E["verify hash outside Kit transaction"]
-    E --> F{"Correct and within window?"}
-    F -->|No| G["deny, throttle, or stale; no row issued"]
+    E --> F{"Correct password?"}
+    F -->|No| G["deny or throttle; no row issued"]
     F -->|Yes| H["withCurrent stage 2; reauthorize and recheck sign-in/revision"]
-    H --> I["insert confirmation row and return id/expiry"]
+    H --> I{"Window still open?"}
+    I -->|No| J["PasswordConfirmationStaleException; no row issued"]
+    I -->|Yes| K["insert confirmation row and return id/expiry"]
 ```
 
 **Code references:** [Entry/service](../src/password_confirmations.ts#L149), [request binding](../src/intent_hash.ts), [config](../src/types.ts#L39)
