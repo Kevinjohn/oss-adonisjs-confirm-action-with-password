@@ -4,12 +4,13 @@ Source baseline: `d76251788f62f41bcbe3732f382ba72ff48f1446` (origin/main, 2026-1
 
 ## Index
 
-| Story                                                   | Action                                                                      | Status   |
-| ------------------------------------------------------- | --------------------------------------------------------------------------- | -------- |
-| [US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md)    | Issue a confirmation after re-entering the password                         | Current  |
-| [US-CONFIRM-02](US-CONFIRM-02-spend-confirmation.md)    | Spend a confirmation with the sensitive change                              | Current  |
-| [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md)  | Invalidate a confirmation when account credentials or sign-in state changes | Current  |
-| [US-CONFIRM-04](US-CONFIRM-04-operate-confirmations.md) | Configure storage and remove spent or expired confirmations                 | Operator |
+| Story                                                     | Action                                              | Status   |
+| --------------------------------------------------------- | --------------------------------------------------- | -------- |
+| [US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md)      | Issue a confirmation after re-entering the password | Current  |
+| [US-CONFIRM-02](US-CONFIRM-02-spend-confirmation.md)      | Spend a confirmation with the sensitive change      | Current  |
+| [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md)    | Reject confirmations after account security changes | Current  |
+| [US-CONFIRM-04](US-CONFIRM-04-configure-confirmations.md) | Configure confirmation storage and provider         | Operator |
+| [US-CONFIRM-05](US-CONFIRM-05-prune-confirmations.md)     | Remove spent or expired confirmations               | Operator |
 
 ## Files
 

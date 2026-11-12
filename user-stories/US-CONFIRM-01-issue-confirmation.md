@@ -11,7 +11,7 @@ As a signed-in account holder, I want to confirm my password for a named sensiti
 
 ## Acceptance criteria
 
-- The host supplies action, scope, exact JSON intent, and password; these values are inputs to the service, not package-rendered form fields.
+- The host supplies action and scope strings of 1–255 characters, a required intent made only of plain JSON values (maximum nesting depth 32, finite numbers and safe integers), and the password string. These are API inputs, not package-rendered form fields.
 - Authorization runs before password verification and again before issue; a false policy rejects.
 - A correct password returns `confirmationId` and `expiresAt`; malformed/wrong password, stale verification, missing sign-in registry, refusal or exhausted throttle returns an error and issues nothing.
 - Default failed-attempt budget is 5 per account per minute, then a 20-minute block; `throttle: false` requires host throttling reserved before hash verification.
@@ -45,4 +45,4 @@ flowchart TD
     H --> I["insert confirmation row and return id/expiry"]
 ```
 
-**Code references:** [Entry/service](../src/password_confirmations.ts#L118), [request binding](../src/intent_hash.ts), [config](../src/types.ts#L39)
+**Code references:** [Entry/service](../src/password_confirmations.ts#L149), [request binding](../src/intent_hash.ts), [config](../src/types.ts#L39)

@@ -11,7 +11,7 @@ As a signed-in account holder, I want the application to spend my confirmation w
 
 ## Acceptance criteria
 
-- The host sends the returned ID together with the same action, scope and intent. There is no package form or route.
+- The host sends a non-empty confirmation ID and the same 1–255 character action/scope strings plus the required canonicalizable JSON intent. There is no package form or route.
 - A matching live confirmation is marked consumed before `run`; the mark and host change share the Kit transaction.
 - A missing, expired, consumed, mismatched, revoked or unauthorized confirmation is rejected; rollback of `run` also rolls back the spend.
 
@@ -42,4 +42,4 @@ flowchart TD
     F --> G["Kit transaction commits or rolls back spend and change"]
 ```
 
-**Code references:** [Methods](../src/password_confirmations.ts#L226), [transaction context types](../src/types.ts#L10)
+**Code references:** [Methods](../src/password_confirmations.ts#L264), [transaction context types](../src/types.ts#L10)

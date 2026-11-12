@@ -15,3 +15,14 @@
 - User instructions: [README usage and host rules](../README.md#use), [throttling and origin guidance](../README.md#rules-the-host-must-keep). No interactive guide or built-in route exists.
 
 Status records source availability, not test execution. `Current` means the API can be called when the stated Account Kit and host conditions hold; tests are linked as evidence only.
+
+## Availability definitions
+
+- **Current:** exposed under stated account, session, configuration and host conditions; not a test result.
+- **Hidden:** implementation remains but its ordinary entry or trigger is unavailable.
+- **Removed:** historical capability has no current product entry.
+- **Demo:** available only in a named demo context.
+- **Operator:** installation, hosting, cleanup or recovery outside an ordinary application journey.
+- **Planned:** an agreed target without an ordinary implemented journey.
+
+See the portable [story template](TEMPLATE.md) for the complete writing and diagram maintenance rules.

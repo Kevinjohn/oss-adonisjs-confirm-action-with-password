@@ -38,4 +38,4 @@ flowchart TD
     D -->|Yes| F["Confirmation can be consumed"]
 ```
 
-**Code references:** [Spend check](../src/password_confirmations.ts#L178), [revocation contract](../README.md#what-ends-a-confirmation), [revocation spec](../tests/revocation.spec.ts)
+**Code references:** [Spend check](../src/password_confirmations.ts#L229), [revocation contract](../README.md#what-ends-a-confirmation), [revocation spec](../tests/revocation.spec.ts)
