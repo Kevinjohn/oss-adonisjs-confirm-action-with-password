@@ -20,7 +20,7 @@ As an application operator, I want to install the provider and storage so that c
 | `--table`        | CLI option | Optional; defaults to `password_confirmations`; must be a plain SQL identifier matching `[A-Za-z_][A-Za-z0-9_]*`. |
 
 - Configure writes config, migration and provider without overwriting files; invalid option values prevent those writes. Its migration must sort after Account Kit `account_sessions`.
-- The config `window` accepts a duration string or number, defaults to `5m`, and must parse to a positive duration. The host can also configure password read/verify callbacks, authorization callback and throttling.
+- The config `window` accepts a duration string or a number of milliseconds, defaults to `5m`, and must parse to a positive safe-integer number of milliseconds. The host can also configure password read/verify callbacks, authorization callback and throttling.
 - The provider binds the package service to Account Kit, Lucid and application hash/limiter dependencies. HTTP routes, origin checks and response mapping remain host-owned.
 
 ## User flow
@@ -42,7 +42,7 @@ flowchart TD
     B -->|No| C["Report invalid flags and write no files"]
     B -->|Yes| D["Write config and ordered migration only when absent"]
     D --> E["Register provider"]
-    E --> F["defineConfig validates positive duration and identifiers"]
+    E --> F["defineConfig validates positive safe-integer milliseconds and identifiers"]
     F --> G["Provider constructs PasswordConfirmations"]
     G --> H["Host routes resolve service and own request boundary"]
 ```
