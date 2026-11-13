@@ -37,7 +37,7 @@ Scope: package service path; HTTP request validation, origin checks and response
 flowchart TD
     A["confirmPassword(input, request)"] --> B["bindRequest(action, scope, intent)"]
     B --> C["withCurrent stage 1; authorize; read hash"]
-    C --> D["reserve limiter attempt"]
+    C --> D["reserve configured internal limiter attempt; host reservation required when disabled"]
     D --> E["verify hash outside Kit transaction"]
     E --> F{"Correct password?"}
     F -->|No| G["deny or throttle; no row issued"]

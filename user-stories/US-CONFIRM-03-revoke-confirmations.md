@@ -12,7 +12,7 @@ As an account holder, I want confirmations tied to my current sign-in and creden
 ## Acceptance criteria
 
 - Password change/reset, logout, session revocation, restriction changes, completed email change, account deletion, expiry, and a new sign-in in the same browser end outstanding confirmations as described in README.
-- Spending requires the live credential revision and same sign-in; otherwise the service refuses.
+- Spending requires the live credential revision and same live sign-in; otherwise the service refuses before or during confirmation consumption. Recover with an eligible sign-in, then fresh password confirmation; a deleted account cannot issue new proof.
 - Social unlink and registration claim share Kit invalidation paths but are called out as not directly driven by tests in the README.
 
 ## User flow
@@ -22,7 +22,9 @@ flowchart TD
     A["Account holder changes password or sign-in state"] --> B["Account Kit applies lifecycle change"]
     B --> C["Previously issued confirmation is no longer usable"]
     C --> D["Next sensitive request is refused"]
-    D --> E["Account holder confirms password again"]
+    D --> E{"Account can establish an eligible sign-in?"}
+    E -->|Yes| F["Sign in if needed, then confirm password again"]
+    E -->|No| G["Fresh confirmation unavailable"]
 ```
 
 ## Code flow
@@ -32,8 +34,10 @@ Scope: package service path; HTTP request validation, origin checks and response
 ```mermaid
 flowchart TD
     A["Account Kit lifecycle operation"] --> B["Kit invalidates session or advances credential state"]
-    B --> C["consume reads current sign-in and live credential revision"]
-    C --> D{"Stored binding still matches?"}
+    B --> C{"withConfirmation calls withCurrent; live sign-in accepted?"}
+    C -->|No| G["Refuse invalid or revoked sign-in before consume"]
+    C -->|Yes| H["consume compares live credential revision and stored binding"]
+    H --> D{"Stored binding still matches?"}
     D -->|No| E["No matching row update; required error"]
     D -->|Yes| F["Confirmation can be consumed"]
 ```
