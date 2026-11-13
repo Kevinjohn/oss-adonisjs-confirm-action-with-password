@@ -32,6 +32,10 @@ node ace migration:run
 `configure` writes `config/password_confirmations.ts`, one migration and registers the provider. It never
 overwrites existing files.
 
+## User stories
+
+See the [user story catalogue](user-stories/README.md) for the source-reviewed capabilities and boundaries.
+
 ## Use
 
 ```ts
