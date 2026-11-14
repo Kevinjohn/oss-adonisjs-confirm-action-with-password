@@ -37,9 +37,11 @@ Scope: package service path; HTTP request validation, origin checks and response
 flowchart TD
     A["confirmPassword(input, request)"] --> B["bindRequest(action, scope, intent)"]
     B --> C["withCurrent stage 1; authorize; read hash"]
-    C --> D{"Attempt reserved? (host reservation required when throttle is off)"}
+    C --> T{"Package throttle on?"}
+    T -->|"No (throttle: false; host throttles in its own route)"| E["verify hash outside Kit transaction"]
+    T -->|Yes| D{"Attempt reserved?"}
     D -->|No| D2["PasswordConfirmationThrottledException (429); no hash run, no row issued"]
-    D -->|Yes| E["verify hash outside Kit transaction"]
+    D -->|Yes| E
     E --> F{"Correct password?"}
     F -->|No| G["PasswordConfirmationDeniedException; block armed when budget spent; no row issued"]
     F -->|Yes| H["withCurrent stage 2; reauthorize and recheck sign-in/revision"]
