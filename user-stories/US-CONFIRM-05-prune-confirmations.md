@@ -7,7 +7,7 @@ As an application operator, I want to remove spent and expired confirmations so 
 **Entry:** Host scheduler calls `passwordConfirmations.prune()`; no package command or scheduler is provided.
 **Documentation:** [README use](../README.md#use)
 **Source:** [`PasswordConfirmations.prune`](../src/password_confirmations.ts)
-**Coverage:** [`tests/revocation.spec.ts`](../tests/revocation.spec.ts)
+**Coverage:** [`tests/password_confirmations.spec.ts`](../tests/password_confirmations.spec.ts)
 
 ## Acceptance criteria
 
@@ -33,4 +33,4 @@ flowchart TD
     C --> D["Return affected row count"]
 ```
 
-**Code references:** [prune method](../src/password_confirmations.ts#L276), [window configuration](../src/types.ts#L39)
+**Code references:** [prune method](../src/password_confirmations.ts#L276), [window configuration](../src/types.ts#L55)

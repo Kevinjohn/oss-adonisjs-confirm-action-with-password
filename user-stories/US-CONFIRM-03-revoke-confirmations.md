@@ -3,7 +3,7 @@
 As an account holder, I want confirmations tied to my current sign-in and credential revision so that account security changes invalidate earlier proof.
 
 **Status:** Current; invalidation follows Account Kit lifecycle changes.
-**Access:** Current registered sign-in and unchanged credential revision are required at spend. Account Kit owns session expiry, revocation and credential updates.
+**Access:** Current registered sign-in and unchanged credential revision are required at spend. Account Kit owns session expiry, revocation and credential updates. The logout guarantee needs a server-side session store, because the cookie store keeps a copied session alive ([US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md), [README requirements](../README.md#requirements)).
 **Entry:** No separate control. The host observes refusal on the next protected operation; Account Kit lifecycle operations trigger invalidation.
 **Documentation:** [README confirmation lifecycle](../README.md#what-ends-a-confirmation)
 **Source:** [`consume`](../src/password_confirmations.ts), [Account Kit compatibility tests](../tests/revocation.spec.ts)
