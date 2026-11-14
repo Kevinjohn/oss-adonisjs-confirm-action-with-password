@@ -37,7 +37,8 @@ flowchart TD
     A["withConfirmation(input, request, run)"] --> B["authentication.withCurrent"]
     B --> C{"consume: sign-in registered, request binds, policy allows?"}
     C -->|No| C2["SessionRegistryRequiredException, InvalidPasswordConfirmationRequestException (400) or PasswordConfirmationForbiddenException; no update"]
-    C -->|Yes| C3["empty ID check, live credential revision, conditional update"]
+    C -->|Yes| C3["non-empty string ID check, live credential revision, conditional update"]
+    C3 -->|"empty or non-string ID"| E
     C3 --> D{"exact row update count is 1?"}
     D -->|No| E["PasswordConfirmationRequiredException"]
     D -->|Yes| F["run(context) in same trx"]

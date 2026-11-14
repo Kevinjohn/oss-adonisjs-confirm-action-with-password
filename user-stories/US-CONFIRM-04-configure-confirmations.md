@@ -3,7 +3,7 @@
 As an application operator, I want to install the provider and storage so that confirmation operations can run with their Account Kit dependencies.
 
 **Status:** Operator.
-**Access:** Application operator configures Account Kit first, registers package provider and runs migrations.
+**Access:** Application operator configures Account Kit first, registers package provider and runs migrations. Configure does not detect the session store; the application needs a server-side session store for the logout guarantee ([US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md), [README requirements](../README.md#requirements)).
 **Entry:** `node ace configure @kevinjohn/adonisjs-confirm-action-with-password`.
 **Documentation:** [Install](../README.md#install)
 **Source:** [`configure`](../configure.ts)

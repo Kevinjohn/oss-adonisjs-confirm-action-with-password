@@ -3,7 +3,7 @@
 As a signed-in account holder, I want to confirm my password for a named sensitive action so that the application can require recent proof before it changes important data.
 
 **Status:** Current, for a current Account Kit session with session management enabled.
-**Access:** Account Kit session sign-in with a server-side session store (the cookie store keeps a copied session alive after logout, which [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md) relies on; [README requirements](../README.md#requirements)); access tokens are refused because they have no sign-in row. Host must reject foreign-origin issuance requests before invoking the service.
+**Access:** Account Kit session sign-in with a server-side session store (the cookie store keeps a copied session alive after logout, so the logout guarantee in [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md) needs a server-side store; [README requirements](../README.md#requirements)); access tokens are refused because they have no sign-in row. Host must reject foreign-origin issuance requests before invoking the service.
 **Entry:** Host-owned issuance endpoint calls `passwordConfirmations.confirmPassword(input, request)`; the package has no HTTP control.
 **Documentation:** [README usage and host requirements](../README.md#use)
 **Source:** [`PasswordConfirmations.confirmPassword`](../src/password_confirmations.ts)
