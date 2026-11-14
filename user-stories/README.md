@@ -1,6 +1,6 @@
 # User story catalogue
 
-Source baseline: `d76251788f62f41bcbe3732f382ba72ff48f1446` (origin/main, 2026-11-12). Scope: public package API, configuration and provider setup, issuance and spending, credential/session invalidation, throttling, and operator pruning. Source-reviewed only; no runtime journeys were exercised for this catalogue.
+Source baseline: `2a5dd8cf07c4869bd4c2d3bf1d310597d452239d` (origin/main, 2026-11-14). Scope: public package API, configuration and provider setup, issuance and spending, credential/session invalidation, throttling, and operator pruning. Source-reviewed only; no runtime journeys were exercised for this catalogue.
 
 ## Index
 
