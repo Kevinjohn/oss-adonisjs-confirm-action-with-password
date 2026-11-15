@@ -24,7 +24,7 @@ authorizes.
 ## Install
 
 ```sh
-pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.1.0/kevinjohn-adonisjs-confirm-action-with-password-0.1.0.tgz
+pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.1.1/kevinjohn-adonisjs-confirm-action-with-password-0.1.1.tgz
 node ace configure @kevinjohn/adonisjs-confirm-action-with-password   # --users-table, --user-id-type as for Account Kit
 node ace migration:run
 ```
@@ -122,6 +122,7 @@ changes.
 | --------------------------------------------------- | ------ | --------------------------------------------------------------------------- |
 | `E_PASSWORD_CONFIRMATION_REQUIRED`                  | 403    | Missing, spent, expired, or bound to another sign-in, credential or request |
 | `E_PASSWORD_CONFIRMATION_DENIED`                    | 403    | Wrong password                                                              |
+| `E_PASSWORD_CONFIRMATION_THROTTLED`                 | 429    | Too many wrong passwords; `retryAfterSeconds` says when to retry            |
 | `E_PASSWORD_CONFIRMATION_STALE`                     | 403    | The window passed between the password check and issue                      |
 | `E_PASSWORD_CONFIRMATION_FORBIDDEN`                 | 403    | `authorize` returned false                                                  |
 | `E_PASSWORD_CONFIRMATION_INVALID_REQUEST`           | 400    | Malformed action, scope or intent (JSON values only)                        |
