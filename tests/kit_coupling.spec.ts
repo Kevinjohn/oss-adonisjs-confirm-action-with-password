@@ -21,7 +21,7 @@ const KIT_READS = {
   users: ['id', 'password', 'credentials_changed_at'],
   account_sessions: ['id', 'user_id', 'handle_hash'],
 }
-const SUPPORTED_KIT = '0.3.4'
+const SUPPORTED_KIT = '0.4.0'
 
 let fixture: Fixture
 
