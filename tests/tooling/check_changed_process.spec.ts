@@ -12,6 +12,9 @@ const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../
 const runnerPath = path.join(repoRoot, 'bin/check_changed.ts')
 const plannerPath = path.join(repoRoot, 'bin/check_changed_plan.ts')
 
+/** The shim logs each step's arguments without the `pnpm` prefix, one step per line. */
+const laterSteps = /^(lint|typecheck)$/m
+
 type FixtureOptions = {
   command?: 'normal' | 'hang' | 'missing'
   hook?: 'record-term' | 'fail-reap'
@@ -113,7 +116,10 @@ test('runs selected static checks normally and observes a missing command spawn 
   const normalResult = await collectExit(normalChild, normalOutput)
   assert.equal(normalResult.code, 0, normalResult.text)
   assert.match(normalResult.text, /pass format/)
-  assert.match(await readFile(normal.log, 'utf8'), /exec prettier --check/)
+  const normalLog = await readFile(normal.log, 'utf8')
+  assert.match(normalLog, /exec prettier --check/)
+  // Positive control: this is how the shim logs the steps the interrupt tests must not see.
+  assert.match(normalLog, laterSteps)
 
   const missing = await fixture({ command: 'missing' })
   cleanup(() => rm(missing.directory, { recursive: true, force: true }))
@@ -138,7 +144,7 @@ test('TERM-resistant descendants receive KILL, are reaped, and block later selec
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
   assert.match(result.text, /fail format \(exit killed\)/)
-  assert.doesNotMatch(await readFile(f.log, 'utf8'), /pnpm lint|pnpm typecheck/)
+  assert.doesNotMatch(await readFile(f.log, 'utf8'), laterSteps)
   assert.equal(await isAlive(descendantPid), false)
   assert.doesNotMatch(result.text, /UnhandledPromiseRejection|unhandledRejection/)
 }).timeout(20_000)
@@ -158,7 +164,7 @@ test('a second signal escalates immediately while the first signal determines th
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
   assert.equal(await isAlive(descendantPid), false)
-  assert.doesNotMatch(await readFile(f.log, 'utf8'), /pnpm lint|pnpm typecheck/)
+  assert.doesNotMatch(await readFile(f.log, 'utf8'), laterSteps)
 }).timeout(15_000)
 
 test('reports failed final reap and retains the first signal result', async ({ cleanup }) => {
@@ -171,7 +177,7 @@ test('reports failed final reap and retains the first signal result', async ({ c
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
   assert.match(result.text, /cleanup failed:.*did not exit after SIGKILL/s)
-  assert.doesNotMatch(await readFile(f.log, 'utf8'), /pnpm lint|pnpm typecheck/)
+  assert.doesNotMatch(await readFile(f.log, 'utf8'), laterSteps)
   assert.doesNotMatch(result.text, /UnhandledPromiseRejection|unhandledRejection/)
 }).timeout(20_000)
 

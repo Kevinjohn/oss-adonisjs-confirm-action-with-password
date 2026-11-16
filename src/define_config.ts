@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE.md
+ * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
@@ -19,6 +19,20 @@ function resolveThrottle(throttle: PasswordConfirmationsConfig['throttle']) {
     throw new InvalidPasswordConfirmationsConfigException(
       'throttle.requests must be a positive integer'
     )
+  }
+  for (const field of ['duration', 'blockDuration'] as const) {
+    // The limiter counts whole seconds, so a sub-second value becomes 0 and never expires.
+    let seconds: number
+    try {
+      seconds = string.seconds.parse(resolved[field])
+    } catch {
+      seconds = Number.NaN
+    }
+    if (!Number.isSafeInteger(seconds) || seconds < 1) {
+      throw new InvalidPasswordConfirmationsConfigException(
+        `throttle.${field} must be a duration of at least one second`
+      )
+    }
   }
   return resolved
 }

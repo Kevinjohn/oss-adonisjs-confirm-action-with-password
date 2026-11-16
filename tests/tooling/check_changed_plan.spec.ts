@@ -41,7 +41,12 @@ test('package source and manifests run the suite and build', ({ assert }) => {
 })
 
 test('files the specs read run the full suite without building the package', ({ assert }) => {
-  for (const path of ['tests/helpers.ts', 'CHANGELOG.md', '.github/workflows/checks.yml']) {
+  for (const path of [
+    'tests/helpers.ts',
+    'CHANGELOG.md',
+    '.github/workflows/checks.yml',
+    'user-stories/US-CONFIRM-01-issue-confirmation.md',
+  ]) {
     const commands = ran(planChangedChecks(changed(path)))
     assert.deepEqual(commands.tests, ['pnpm', 'quick:test'], path)
     assert.notProperty(commands, 'build', path)

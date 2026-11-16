@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE.md
+ * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
@@ -64,7 +64,8 @@ export interface PasswordConfirmationsConfig {
   readPasswordHash?: (userId: UserId, trx: Trx) => Promise<string | null>
   /**
    * Checks a password against the stored hash. Default: the application's hash service. Return
-   * false for a wrong or malformed password; a throw is rethrown and refunds the attempt.
+   * false for a wrong or malformed password; a throw is rethrown and refunds the attempt (an
+   * `AggregateError` carrying both faults, with the throw as `cause`, if the refund fails too).
    */
   verifyPassword?: (hashed: string, password: string) => Promise<boolean>
   /** Host policy such as "only the owner, never while masquerading". Default allows. */
@@ -80,7 +81,9 @@ export interface PasswordConfirmationsConfig {
 /** A failed-attempt budget for `confirmPassword`. */
 export interface ConfirmationThrottle {
   requests: number
+  /** A duration string such as `'1 minute'`, or a number of seconds. At least one second. */
   duration: string | number
+  /** A duration string such as `'20 minutes'`, or a number of seconds. At least one second. */
   blockDuration: string | number
 }
 

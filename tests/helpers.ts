@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE.md
+ * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
@@ -49,12 +49,12 @@ export default class extends BaseSchema {
       // Host restriction state for Account Kit's changeRestriction and canAccess.
       table.boolean('restricted').notNullable().defaultTo(false)
     })
-    // Stand-in for the product write a confirmation authorizes.
     // Account Kit's access-token table, for the token-strategy fixture.
     this.schema.createTable('auth_access_tokens', (table) => {
       table.increments('id')
       table.integer('tokenable_id').notNullable()
     })
+    // Stand-in for the product write a confirmation authorizes.
     this.schema.createTable('effects', (table) => {
       table.increments('id')
       table.string('label').notNullable()
@@ -158,7 +158,7 @@ export interface Fixture {
   db: Database
   kit: AccountKit
   root: string
-  /** Builds an `PasswordConfirmations` on the booted app with a movable clock. */
+  /** Builds a `PasswordConfirmations` on the booted app with a movable clock. */
   confirmations(config?: PasswordConfirmationsConfig): PasswordConfirmations
   clock: { now: number }
   /** Account Kit notifications captured in place of mail: read tokens with `tokenFor`. */

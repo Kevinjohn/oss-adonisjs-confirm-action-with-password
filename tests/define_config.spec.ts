@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE.md
+ * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
@@ -33,5 +33,24 @@ test.group('defineConfig', () => {
     assert.throws(() => defineConfig({ table: 'confirmations; drop' }), /table must be/)
     assert.throws(() => defineConfig({ usersTable: '1users' }), /usersTable must be/)
     assert.throws(() => defineConfig({ throttle: { requests: 0 } }), /throttle.requests/)
+  })
+
+  test('refuses throttle durations the limiter cannot count', ({ assert }) => {
+    // The limiter counts whole seconds: '1ms' parses to 0, which its memory store never expires.
+    for (const duration of ['soon', 0, -1, '1ms', Number.NaN, undefined]) {
+      assert.throws(
+        () => defineConfig({ throttle: { duration } }),
+        /throttle\.duration must be a duration of at least one second/
+      )
+      assert.throws(
+        () => defineConfig({ throttle: { blockDuration: duration } }),
+        /throttle\.blockDuration must be a duration of at least one second/
+      )
+    }
+    assert.deepEqual(defineConfig({ throttle: { duration: 30, blockDuration: '1s' } }).throttle, {
+      requests: 5,
+      duration: 30,
+      blockDuration: '1s',
+    })
   })
 })
