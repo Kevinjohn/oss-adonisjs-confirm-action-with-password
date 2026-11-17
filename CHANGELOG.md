@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Require Account Kit `0.4.0` exactly. The three Kit storage details this package reads are
+  unchanged in 0.4.0: the coupling canary and the revocation suite pass against it.
+
 ## 0.1.1 - 2026-11-10
 
 - Require Account Kit `0.3.4` exactly. Account Kit 0.3.4 changes only its examples and tooling, so
