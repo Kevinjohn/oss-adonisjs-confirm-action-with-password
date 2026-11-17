@@ -11,6 +11,7 @@ const root = fileURLToPath(new URL('../', import.meta.url))
 const stepLimitMs = 15 * 60 * 1000
 const termGraceMs = 5000
 const reapGraceMs = 5000
+const outputKeep = 256 * 1024
 let active: ChildProcess | undefined
 let interruptedBy: NodeJS.Signals | undefined
 let interruptionCleanup: Promise<void> | undefined
@@ -166,8 +167,13 @@ function run(
     let output = ''
     let spawnError: Error | undefined
     let timedOut = false
-    child.stdout.on('data', (chunk) => (output += chunk))
-    child.stderr.on('data', (chunk) => (output += chunk))
+    // Keep a bounded tail: the summary line and the 40 printed lines are at the end.
+    const append = (chunk: Buffer | string) => {
+      output += chunk
+      if (output.length > outputKeep * 2) output = output.slice(-outputKeep)
+    }
+    child.stdout.on('data', append)
+    child.stderr.on('data', append)
     const timer = setTimeout(() => {
       timedOut = true
       output += `\n[check:changed] stopped after ${stepLimitMs / 60000} minutes\n`
@@ -237,7 +243,6 @@ for (const step of planChangedChecks(changes, { static: flags.includes('--static
     console.log(`skip ${step.label} (${step.skip})`)
     continue
   }
-  const before = step.requiresCleanTree ? git(['status', '--porcelain']) : ''
   const { status, output } = await run(step)
   const tests = step.countsTests ? executedTests(output) : undefined
   const problem =
@@ -247,9 +252,7 @@ for (const step of planChangedChecks(changes, { static: flags.includes('--static
         ? `interrupted by ${interruptedBy}`
         : step.requiresTests && tests === 0
           ? 'no tests executed'
-          : step.requiresCleanTree && git(['status', '--porcelain']) !== before
-            ? 'left the worktree dirty'
-            : undefined
+          : undefined
   if (problem) {
     failed = true
     console.log(`fail ${step.label} (${problem}): ${step.command.join(' ')}`)

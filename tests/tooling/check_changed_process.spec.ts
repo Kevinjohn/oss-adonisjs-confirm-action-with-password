@@ -70,7 +70,7 @@ async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
     const commandPath = path.join(bin, 'pnpm')
     await writeFile(
       commandPath,
-      `#!${process.execPath}\nimport { spawn } from 'node:child_process'\nimport { readFile, writeFile } from 'node:fs/promises'\nconst args = process.argv.slice(2)\nawait writeFile(${JSON.stringify(log)}, (await readFile(${JSON.stringify(log)}, 'utf8')) + args.join(' ') + '\\n')\nif (process.env.CHECK_CHANGED_HANG === '1') {\n  spawn(process.execPath, ['worker.js'], { cwd: process.cwd(), stdio: 'ignore' })\n  for (let attempt = 0; attempt < 250; attempt++) {\n    if (await readFile(${JSON.stringify(ready)}, 'utf8').catch(() => '')) break\n    await new Promise((resolve) => setTimeout(resolve, 20))\n  }\n  setInterval(() => {}, 1000)\n}\n`,
+      `#!${process.execPath}\nimport { spawn } from 'node:child_process'\nimport { readFile, writeFile } from 'node:fs/promises'\nconst args = process.argv.slice(2)\nawait writeFile(${JSON.stringify(log)}, (await readFile(${JSON.stringify(log)}, 'utf8')) + args.join(' ') + '\\n')\nif (process.env.CHECK_CHANGED_FLOOD && args[0] === 'exec') {\n  const line = 'x'.repeat(1023) + '\\n'\n  const block = line.repeat(1024)\n  for (let mib = 0; mib < Number(process.env.CHECK_CHANGED_FLOOD); mib++) {\n    if (!process.stdout.write(block)) await new Promise((resolve) => process.stdout.once('drain', resolve))\n  }\n}\nif (process.env.CHECK_CHANGED_HANG === '1') {\n  spawn(process.execPath, ['worker.js'], { cwd: process.cwd(), stdio: 'ignore' })\n  for (let attempt = 0; attempt < 250; attempt++) {\n    if (await readFile(${JSON.stringify(ready)}, 'utf8').catch(() => '')) break\n    await new Promise((resolve) => setTimeout(resolve, 20))\n  }\n  setInterval(() => {}, 1000)\n}\n`,
       { mode: 0o755 }
     )
   }
@@ -90,6 +90,7 @@ async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
     PATH: `${bin}${path.delimiter}${supportBin}`,
   }
   delete env.CHECK_CHANGED_HANG
+  delete env.CHECK_CHANGED_FLOOD
   if (options.command === 'hang') env.CHECK_CHANGED_HANG = '1'
   if (options.hook) {
     env.NODE_OPTIONS =
@@ -216,3 +217,18 @@ require('node:module').syncBuiltinESMExports()
   assert.match(result.text, /LOCAL_HANDLE_RELEASED/)
   assert.equal(await readFile(f.log, 'utf8'), '')
 }).timeout(10_000)
+
+test('keeps a bounded tail of a step that prints far more than the heap allows', async ({
+  cleanup,
+}) => {
+  const f = await fixture()
+  cleanup(() => rm(f.directory, { recursive: true, force: true }))
+  // 256 MiB of output against a 64 MiB heap: an unbounded buffer runs out of memory.
+  f.env.CHECK_CHANGED_FLOOD = '256'
+  f.env.NODE_OPTIONS = `${f.env.NODE_OPTIONS ?? ''} --max-old-space-size=64`
+  const child = launch(f)
+  const output = await outputOf(child)
+  const result = await collectExit(child, output)
+  assert.equal(result.code, 0, result.text.slice(-2000))
+  assert.match(result.text, /pass format/)
+}).timeout(60_000)
