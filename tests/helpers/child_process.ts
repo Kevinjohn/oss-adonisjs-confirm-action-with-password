@@ -10,12 +10,12 @@ export async function outputOf(child: ChildProcess): Promise<{ text: () => strin
   return { text: () => output }
 }
 
-/** Wait for a child to exit and return its status with the output collected so far. */
+/** Wait for the child's streams to drain, then return its status and everything it wrote. */
 export async function collectExit(
   child: ChildProcess,
   output: { text: () => string }
 ): Promise<{ code: number | null; signal: NodeJS.Signals | null; text: string }> {
-  const [code, signal] = (await once(child, 'exit')) as [number | null, NodeJS.Signals | null]
+  const [code, signal] = (await once(child, 'close')) as [number | null, NodeJS.Signals | null]
   return { code, signal, text: output.text() }
 }
 
@@ -35,14 +35,32 @@ export async function isAlive(pid: number): Promise<boolean> {
   }
 }
 
-/** Poll for a file a child writes, such as a pid file. */
+/** Poll for a file a child writes; only a missing file is retried. */
 export async function waitForFile(filePath: string, timeoutMs = 5000): Promise<string> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
     try {
       return await readFile(filePath, 'utf8')
-    } catch {}
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
   throw new Error(`Timed out waiting for ${filePath}`)
+}
+
+/** Poll for a pid file and return a complete, positive pid. */
+export async function waitForPid(filePath: string, timeoutMs = 5000): Promise<number> {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const content = await readFile(filePath, 'utf8')
+      const pid = Number(content.trim())
+      if (Number.isSafeInteger(pid) && pid > 0) return pid
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
+  throw new Error(`Timed out waiting for a pid in ${filePath}`)
 }
