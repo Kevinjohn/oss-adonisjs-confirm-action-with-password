@@ -15,7 +15,7 @@ defineProps<{ body: string; pending: boolean }>()
       ><input id="password" name="password" type="password" required />
       <button type="submit" :disabled="processing">Confirm password</button>
     </Form>
-    <Form v-if="pending" v-slot="{ processing }" route="secure_notes.update">
+    <Form v-if="pending" v-slot="{ processing }" method="post" route="secure_notes.update">
       <button type="submit" :disabled="processing">Save confirmed note</button>
     </Form>
   </section>
