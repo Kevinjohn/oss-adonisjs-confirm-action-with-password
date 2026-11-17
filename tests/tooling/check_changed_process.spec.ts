@@ -120,16 +120,25 @@ function launch(f: Fixture, cleanup: (fn: () => void | Promise<void>) => void): 
   return child
 }
 
-/** Wait for the hanging step's worker and own it: it runs in a process group of its own. */
+/**
+ * Wait for the hanging step's worker and own it. The runner starts each step in a process group
+ * of its own, so killing the runner's group leaves the step's command and the worker running.
+ */
 async function ownDescendant(
   f: Fixture,
   cleanup: (fn: () => void | Promise<void>) => void
 ): Promise<number> {
   const pid = await waitForPid(f.ready)
+  const group = Number(
+    execFileSync('ps', ['-o', 'pgid=', '-p', String(pid)], { encoding: 'utf8' }).trim()
+  )
+  assert.ok(Number.isSafeInteger(group) && group > 1, `worker ${pid} has no process group`)
   cleanup(() => {
-    try {
-      process.kill(pid, 'SIGKILL')
-    } catch {}
+    for (const target of [-group, pid]) {
+      try {
+        process.kill(target, 'SIGKILL')
+      } catch {}
+    }
   })
   return pid
 }
