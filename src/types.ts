@@ -81,9 +81,9 @@ export interface PasswordConfirmationsConfig {
 /** A failed-attempt budget for `confirmPassword`. */
 export interface ConfirmationThrottle {
   requests: number
-  /** A duration string such as `'1 minute'`, or a number of seconds. At least one second. */
+  /** A duration string such as `'1 minute'`, or a whole number of seconds. At least one second. */
   duration: string | number
-  /** A duration string such as `'20 minutes'`, or a number of seconds. At least one second. */
+  /** A duration string such as `'20 minutes'`, or a whole number of seconds. At least one second. */
   blockDuration: string | number
 }
 

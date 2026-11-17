@@ -37,7 +37,7 @@ test.group('defineConfig', () => {
 
   test('refuses throttle durations the limiter cannot count', ({ assert }) => {
     // The limiter counts whole seconds: '1ms' parses to 0, which its memory store never expires.
-    for (const duration of ['soon', 0, -1, '1ms', Number.NaN, undefined]) {
+    for (const duration of ['soon', 0, -1, 1.5, '1ms', Number.NaN, undefined]) {
       assert.throws(
         () => defineConfig({ throttle: { duration } }),
         /throttle\.duration must be a duration of at least one second/
