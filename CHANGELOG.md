@@ -10,7 +10,8 @@
   `table.bigInteger('expires_at').notNullable().defaultTo(0)` and `table.index(['expires_at'])`.
 - Breaking: the account block now needs `throttle.requests` completed wrong passwords. Checks
   still in flight, and checks whose verifier threw, no longer count towards it. The block is kept
-  under its own limiter key, so a refund cannot open it and a refused retry cannot extend it.
+  under its own limiter key for exactly `blockDuration`, so a refund cannot open it and a refused
+  retry cannot extend it.
 - The limiter keys are derived from a SHA-256 of the account id (at most 95 characters), so a long
   string id fits the limiter's database store. Counters and blocks in place at upgrade are not
   carried over.
