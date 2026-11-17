@@ -30,14 +30,23 @@ test('waitForPid surfaces read errors other than a missing file', async ({ clean
   await assert.rejects(waitForPid(await directory(cleanup), 100), { code: 'EISDIR' })
 })
 
-test('collectExit returns output the child wrote just before it exited', async () => {
-  const size = 4 * 1024 * 1024
+test('collectExit waits for output written after the child itself exited', async () => {
+  // The grandchild shares the child's stdout and writes only once the child is gone.
+  const grandchild = `
+const parent = Number(process.argv[1])
+const poll = setInterval(() => {
+  try { process.kill(parent, 0) } catch { clearInterval(poll); process.stdout.write('late output') }
+}, 10)
+`
   const child = spawn(
     process.execPath,
-    ['-e', `require('node:fs').writeSync(1, 'x'.repeat(${size}))`],
+    [
+      '-e',
+      `require('node:child_process').spawn(process.execPath, ['-e', ${JSON.stringify(grandchild)}, String(process.pid)], { stdio: ['ignore', 'inherit', 'inherit'] }).unref()`,
+    ],
     { stdio: ['ignore', 'pipe', 'pipe'] }
   )
   const result = await collectExit(child, await outputOf(child))
   assert.equal(result.code, 0)
-  assert.equal(result.text.length, size)
+  assert.equal(result.text, 'late output')
 })
