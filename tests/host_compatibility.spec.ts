@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { createHash } from 'node:crypto'
 import { test } from '@japa/runner'
 import type { Fixture } from './helpers.js'
 import { bootFixture } from './helpers.js'
@@ -12,6 +13,12 @@ async function signedIn() {
   const email = `host-${++users}@x.test`
   const id = await fixture.createUser(email, PW)
   return { id, email, input: await fixture.login(email, PW) }
+}
+
+/** The three limiter keys the package derives for an account. */
+function throttleKeys(userId: string | number) {
+  const attempts = `password_confirmations:${createHash('sha256').update(String(userId)).digest('hex')}`
+  return { attempts, failed: `${attempts}:failed`, blocked: `${attempts}:blocked` }
 }
 
 test.group('host database compatibility', (group) => {
@@ -78,10 +85,9 @@ test.group('host database compatibility', (group) => {
     const other = await signedIn()
     const confirmations = await fixture.app.container.make('password_confirmations')
     const manager = await fixture.app.container.make('limiter.manager')
-    const budget = manager.use({ requests: 5, duration: '1 minute', blockDuration: '20 minutes' })
-    const key = `password_confirmations:${input.userId}`
-    await budget.consume(key)
-    for (let i = 0; i < 4; i++) {
+    const budget = manager.use({ requests: 5, duration: '1 minute' })
+    const keys = throttleKeys(input.userId)
+    for (let i = 0; i < 5; i++) {
       await assert.rejects(
         () =>
           confirmations.confirmPassword(i % 2 ? secondSignIn : input, {
@@ -91,14 +97,12 @@ test.group('host database compatibility', (group) => {
         /Incorrect password/
       )
     }
-    const blockedCount = (await budget.get(key))!.consumed
-    assert.isAtLeast(blockedCount, 5)
-    assert.isAbove((await budget.get(key))!.availableIn, 60)
-    const persisted = await fixture.db
-      .from('rate_limits')
-      .where('key', 'like', `%${key}`)
-      .firstOrFail()
-    assert.equal(persisted.points, blockedCount)
+    // Five completed failures across both sign-ins arm one block, stored in the host's table.
+    // Arming the block clears the counters: the block alone decides until it lapses.
+    assert.isNull(await budget.get(keys.failed))
+    assert.isNull(await budget.get(keys.attempts))
+    assert.isAbove((await budget.get(keys.blocked))!.availableIn, 60)
+    await fixture.db.from('rate_limits').where('key', 'like', `%${keys.blocked}`).firstOrFail()
     for (const session of [input, secondSignIn]) {
       await assert.rejects(
         () => confirmations.confirmPassword(session, { ...request, password: PW }),
@@ -106,16 +110,17 @@ test.group('host database compatibility', (group) => {
       )
     }
     // Both accounts use the same login client key. A different account retains its own budget.
+    const otherKeys = throttleKeys(other.input.userId)
     await assert.rejects(
       () => confirmations.confirmPassword(other.input, { ...request, password: 'wrong' }),
       /Incorrect password/
     )
-    const otherBudget = await budget.get(`password_confirmations:${other.input.userId}`)
-    assert.equal(otherBudget?.consumed, 1)
+    const otherFailed = await budget.get(otherKeys.failed)
+    assert.equal(otherFailed?.consumed, 1)
     await confirmations.confirmPassword(other.input, { ...request, password: PW })
-    assert.isNull(await budget.get(`password_confirmations:${other.input.userId}`))
-    const stillBlocked = await budget.get(key)
-    assert.equal(stillBlocked?.consumed, blockedCount)
+    assert.isNull(await budget.get(otherKeys.failed))
+    assert.isNull(await budget.get(otherKeys.attempts))
+    assert.isAbove((await budget.get(keys.blocked))!.availableIn, 60)
   })
 
   test('the database limiter reserves before hashing a concurrent burst with a pool of one', async ({

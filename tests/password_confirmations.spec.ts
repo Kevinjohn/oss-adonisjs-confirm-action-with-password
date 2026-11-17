@@ -57,6 +57,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       .firstOrFail()
     assert.equal(Number(row.issued_at), fixture.clock.now)
     assert.equal(Number(row.verified_at), fixture.clock.now)
+    assert.equal(Number(row.expires_at), expiresAt)
 
     await confirmations.withConfirmation(input, { ...request, confirmationId }, async ({ trx }) => {
       await trx.from('users').where('id', input.userId).update({ email: 'spent@x.test' })
@@ -120,12 +121,118 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     })
     await assert.rejects(
       () =>
-        confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {
+        confirmations.withConfirmation(input, { ...request, confirmationId }, async ({ trx }) => {
+          await trx.table('effects').insert({ label: 'rolled-back' })
           throw new Error('product failure')
         }),
       'product failure'
     )
+    // The product write went with the spend: neither is stored.
+    assert.lengthOf(await fixture.db.from('effects').where('label', 'rolled-back'), 0)
     await confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {})
+  })
+
+  test('two spends of one confirmation: exactly one wins (serialised by the Kit account lock)', async ({
+    assert,
+  }) => {
+    const confirmations = fixture.confirmations()
+    const { input } = await signedIn()
+    const { confirmationId } = await confirmations.confirmPassword(input, {
+      ...request,
+      password: PW,
+    })
+    const spend = () =>
+      codeOf(
+        confirmations.withConfirmation(input, { ...request, confirmationId }, async ({ trx }) => {
+          await trx.table('effects').insert({ label: 'spent-twice' })
+        })
+      )
+    const outcomes = await Promise.all([spend(), spend()])
+    assert.deepEqual(outcomes.sort(), ['E_PASSWORD_CONFIRMATION_REQUIRED', 'resolved'])
+    assert.lengthOf(await fixture.db.from('effects').where('label', 'spent-twice'), 1)
+  })
+
+  test('a window changed after issue never moves the deadline later, and a shorter one applies at once', async ({
+    assert,
+  }) => {
+    const { input } = await signedIn()
+    const short = fixture.confirmations({ window: '2m' })
+    const long = fixture.confirmations({ window: '5m' })
+    const fromShort = await short.confirmPassword(input, { ...request, password: PW })
+    const fromLong = await long.confirmPassword(input, { ...request, password: PW })
+    assert.equal(fromShort.expiresAt, fixture.clock.now + 2 * 60_000)
+    fixture.clock.now += 2 * 60_000
+    // Issued under 2 minutes, spent by a process configured for 5: the returned deadline holds.
+    assert.equal(
+      await codeOf(
+        long.withConfirmation(
+          input,
+          { ...request, confirmationId: fromShort.confirmationId },
+          async () => {}
+        )
+      ),
+      'E_PASSWORD_CONFIRMATION_REQUIRED'
+    )
+    // Issued under 5 minutes, spent by a process tightened to 2: the tighter window applies.
+    assert.equal(
+      await codeOf(
+        short.withConfirmation(
+          input,
+          { ...request, confirmationId: fromLong.confirmationId },
+          async () => {}
+        )
+      ),
+      'E_PASSWORD_CONFIRMATION_REQUIRED'
+    )
+    await long.withConfirmation(
+      input,
+      { ...request, confirmationId: fromLong.confirmationId },
+      async () => {}
+    )
+  })
+
+  test('prune follows each stored deadline, not the pruning process window', async ({ assert }) => {
+    await fixture.db.from('password_confirmations').delete()
+    const { email, input } = await signedIn()
+    const expired = await fixture
+      .confirmations({ window: '2m' })
+      .confirmPassword(input, { ...request, password: PW })
+    const live = await fixture
+      .confirmations({ window: '5m' })
+      .confirmPassword(await fixture.login(email, PW), { ...request, password: PW })
+    fixture.clock.now += 2 * 60_000
+    assert.equal(await fixture.confirmations({ window: '10m' }).prune(), 1)
+    const rows = await fixture.db.from('password_confirmations').select('id')
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      [live.confirmationId]
+    )
+    assert.notEqual(expired.confirmationId, live.confirmationId)
+  })
+
+  test('issuance stays on the sign-in whose password was checked when the host mutates its input', async ({
+    assert,
+  }) => {
+    const hash = await fixture.app.container.make('hash')
+    const owner = await signedIn()
+    const other = await signedIn()
+    const input = { ...owner.input }
+    const confirmations = fixture.confirmations({
+      // A host that refreshes its credential object in place while the hash runs.
+      verifyPassword: async (hashed, password) => {
+        Object.assign(input, other.input)
+        return hash.verify(hashed, password)
+      },
+    })
+    const { confirmationId } = await confirmations.confirmPassword(input, {
+      ...request,
+      password: PW,
+    })
+    const row = await fixture.db
+      .from('password_confirmations')
+      .where('id', confirmationId)
+      .firstOrFail()
+    assert.equal(String(row.user_id), owner.input.userId)
   })
 
   test('another sign-in of the same account cannot spend it', async ({ assert }) => {
@@ -360,9 +467,17 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       { ...request, confirmationId: first.confirmationId },
       async () => {}
     )
-    await confirmations.confirmPassword(input, { ...request, password: PW })
+    const unspent = await confirmations.confirmPassword(input, { ...request, password: PW })
     assert.isNull(
       await fixture.db.from('password_confirmations').where('id', first.confirmationId).first()
+    )
+    assert.isNotNull(
+      await fixture.db.from('password_confirmations').where('id', unspent.confirmationId).first()
+    )
+    fixture.clock.now += confirmations.windowMs
+    await confirmations.confirmPassword(input, { ...request, password: PW })
+    assert.isNull(
+      await fixture.db.from('password_confirmations').where('id', unspent.confirmationId).first()
     )
   })
 
@@ -375,8 +490,10 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       ...request,
       password: PW,
     })
-    await confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {})
+    // Issued before the spend: a later issuance would delete the spent row, and the comparison
+    // below would then be between two missing rows.
     const other = await confirmations.confirmPassword(input, { ...request, password: PW })
+    await confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {})
     const failures = await Promise.all(
       [
         { ...request, confirmationId: randomUUID() },
@@ -391,6 +508,11 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
           )
       )
     )
+    const spentRow = await fixture.db
+      .from('password_confirmations')
+      .where('id', confirmationId)
+      .firstOrFail()
+    assert.isNotNull(spentRow.consumed_at)
     assert.deepEqual(failures[0], failures[1])
     assert.deepEqual(failures[0], failures[2])
     assert.deepEqual(failures[0], {

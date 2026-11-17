@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Breaking: the confirmations table has a new NOT NULL `expires_at` column holding the deadline
+  returned by `confirmPassword`. Spend, issue-time cleanup and `prune()` use it, so a longer
+  `window` configured later cannot revive a confirmation; a shorter one still applies at once.
+  New installs get the column from `configure`. An existing install adds it with a migration:
+  delete the rows (they live for the window at most), then
+  `table.bigInteger('expires_at').notNullable().defaultTo(0)` and `table.index(['expires_at'])`.
+- Breaking: the account block now needs `throttle.requests` completed wrong passwords. Checks
+  still in flight, and checks whose verifier threw, no longer count towards it. The block is kept
+  under its own limiter key for exactly `blockDuration`, so a refund cannot open it and a refused
+  retry cannot extend it.
+- The limiter keys are derived from a SHA-256 of the account id (at most 95 characters), so a long
+  string id fits the limiter's database store. Counters and blocks in place at upgrade are not
+  carried over.
+- `confirmPassword` copies its `CurrentAccountInput` on entry and refuses to issue for an account
+  other than the one whose password it checked, so a host that refreshes that object in place
+  cannot move issuance onto another sign-in.
+- `configure` warns when an existing config or migration does not match the flags of a rerun. It
+  still leaves both files unchanged.
+
 - `confirmPassword` refuses an account Account Kit reports as passwordless (`hasPassword: false`)
   even when a hash is stored, as the Kit's login does. It counts as a wrong password.
 - `defineConfig` rejects a `throttle.duration` or `throttle.blockDuration` that is not a duration of
