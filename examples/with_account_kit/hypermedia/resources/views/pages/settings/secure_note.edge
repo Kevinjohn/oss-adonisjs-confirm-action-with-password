@@ -1,0 +1,23 @@
+@layouts.app({ title: 'Secure note' })
+  @page()
+    <h1>Secure note</h1>
+    <p>Saving this note requires a fresh password confirmation.</p>
+    <p>Saved note: {{ body }}</p>
+    <form method="POST" action="/settings/secure-note/confirm">
+      {{ csrfField() }}
+      <label for="body">New note</label>
+      <input id="body" name="body" maxlength="500" required />
+      <label for="password">Current password</label>
+      <input id="password" name="password" type="password" required />
+      <button type="submit">Confirm password</button>
+    </form>
+    @if(pending)
+      <form method="POST" action="/settings/secure-note">
+        {{ csrfField() }}
+        <button type="submit">Save confirmed note</button>
+      </form>
+    @end
+
+    <a href="/dashboard">Back to dashboard</a>
+  @end
+@end

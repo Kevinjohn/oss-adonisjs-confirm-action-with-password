@@ -297,3 +297,13 @@ pnpm install
 pnpm check:changed   # format, lint, typecheck and the tests your changes select
 pnpm test            # full suite with coverage thresholds
 ```
+
+## Runnable examples
+
+The package owns three apps copied from Account Kit v0.4.0 and extended with a secure-note action that requires a one-use password confirmation. Each installs Account Kit v0.4.0 and this package v0.2.0 from released archives, so it also checks the published consumer path.
+
+- [Hypermedia](examples/with_account_kit/hypermedia/README.md)
+- [Inertia React](examples/with_account_kit/inertia_react/README.md)
+- [Inertia Vue](examples/with_account_kit/inertia_vue/README.md)
+
+Run each app from its own directory using its README. These are standalone apps; they are outside the package build and lint scope.

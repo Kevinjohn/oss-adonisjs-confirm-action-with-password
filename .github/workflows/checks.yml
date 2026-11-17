@@ -29,3 +29,37 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+  examples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [hypermedia, inertia_react, inertia_vue]
+    defaults:
+      run:
+        working-directory: examples/with_account_kit/${{ matrix.app }}
+    env:
+      NODE_ENV: test
+      PORT: 3333
+      HOST: localhost
+      LOG_LEVEL: info
+      APP_KEY: '12345678901234567890123456789012'
+      APP_URL: http://localhost:3333
+      SESSION_DRIVER: database
+      LIMITER_STORE: memory
+    steps:
+      - uses: actions/checkout@v7
+        with: { persist-credentials: false }
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.23.0
+      - uses: actions/setup-node@v7
+        with: { node-version: 24 }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec node ace codegen
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm build
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm exec node ace test --suites browser --files tests/browser/secure_note_journey.spec.ts
