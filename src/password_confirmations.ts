@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE.md
+ * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
@@ -156,7 +156,11 @@ export class PasswordConfirmations {
       await this.#authorize(context, request)
       return {
         userId: context.account.id,
-        hash: await this.#passwordHash(context.account.id, context.trx),
+        // An account the Kit reports as passwordless cannot confirm with one, whatever is stored:
+        // Account Kit's login refuses it too. A null hash is a wrong password and counts as one.
+        hash: context.account.hasPassword
+          ? await this.#passwordHash(context.account.id, context.trx)
+          : null,
       }
     })
     // Reserve an attempt atomically before the hash, so a parallel burst cannot run more hashes than
@@ -170,8 +174,17 @@ export class PasswordConfirmations {
         first.hash !== null &&
         (await this.#verify(first.hash, request.password))
     } catch (error) {
-      // An infrastructure fault is not a wrong guess: give the attempt back.
-      if (this.#throttle) await this.#throttle.decrement(throttleKey)
+      // An infrastructure fault is not a wrong guess: give the attempt back. If the refund fails
+      // too, report both; whether the attempt is still charged is then unknown.
+      try {
+        if (this.#throttle) await this.#throttle.decrement(throttleKey)
+      } catch (refundError) {
+        throw new AggregateError(
+          [error, refundError],
+          'Password verification failed and its throttle attempt could not be refunded',
+          { cause: error }
+        )
+      }
       throw error
     }
     if (!ok) {

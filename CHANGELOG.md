@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- `confirmPassword` refuses an account Account Kit reports as passwordless (`hasPassword: false`)
+  even when a hash is stored, as the Kit's login does. It counts as a wrong password.
+- `defineConfig` rejects a `throttle.duration` or `throttle.blockDuration` that is not a duration of
+  at least one second. Before, the value failed later inside the limiter, or a sub-second value
+  created a counter that never expired.
+- When the password verifier throws and the attempt refund also fails, `confirmPassword` rejects
+  with an `AggregateError` holding both, with the verifier error as `cause`. Before, the refund
+  error replaced the verifier error.
+
 - Require Account Kit `0.4.0` exactly. The three Kit storage details this package reads are
   unchanged in 0.4.0: the coupling canary and the revocation suite pass against it.
 

@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE.md
+ * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
@@ -259,6 +259,35 @@ test.group('Wrong-password throttling', (group) => {
       await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
       'resolved'
     )
+  })
+
+  test('a failed refund keeps the verifier fault that caused it', async ({ assert }) => {
+    const manager = await fixture.app.container.make('limiter.manager')
+    const verifierFault = new Error('hash backend down')
+    const refundFault = new Error('limiter store down')
+    const confirmations = new PasswordConfirmations({
+      kit: fixture.kit,
+      db: fixture.db,
+      limiter: {
+        use: ((options: ConfirmationThrottle) =>
+          new Proxy(manager.use(options), {
+            get(target, property, receiver) {
+              if (property === 'decrement') return async () => Promise.reject(refundFault)
+              const value = Reflect.get(target, property, receiver)
+              return typeof value === 'function' ? value.bind(target) : value
+            },
+          })) as unknown as typeof manager.use,
+      },
+      config: defineConfig({ throttle: { requests: 1 } }),
+      verifyPassword: async () => Promise.reject(verifierFault),
+    })
+    const { input } = await signedIn()
+    const error = await confirmations
+      .confirmPassword(input, { ...request, password: PW })
+      .catch((e) => e)
+    assert.instanceOf(error, AggregateError)
+    assert.deepEqual(error.errors, [verifierFault, refundFault])
+    assert.strictEqual(error.cause, verifierFault)
   })
 
   test('a throttled attempt does not eat the refund of a faulted one', async ({ assert }) => {

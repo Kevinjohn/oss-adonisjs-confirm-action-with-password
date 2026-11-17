@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE.md
+ * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
@@ -12,6 +12,8 @@ import { test } from '@japa/runner'
 import type { Fixture } from './helpers.js'
 import { bootFixture, codeOf, fakeSessionGuard } from './helpers.js'
 import type { ConfirmationRequest } from '../src/types.js'
+import { PasswordConfirmations } from '../src/password_confirmations.js'
+import { defineConfig } from '../src/define_config.js'
 
 const PW = 'pw-one-Original-7'
 const PW2 = 'Correct-Horse-9-battery'
@@ -518,6 +520,37 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       'E_PASSWORD_CONFIRMATION_DENIED'
     )
     // Fails closed before the hash, whatever the hash service would say.
+    assert.equal(hashed, 0)
+  })
+
+  test('an account the Kit reports as passwordless fails closed despite a stored hash', async ({
+    assert,
+  }) => {
+    const { input } = await signedIn()
+    const hash = await fixture.app.container.make('hash')
+    let hashed = 0
+    // A custom users adapter may keep a legacy hash on a social-only account and report
+    // hasPassword: false; Account Kit's own login refuses that account.
+    const confirmations = new PasswordConfirmations({
+      kit: {
+        authentication: {
+          withCurrent: (current, run) =>
+            fixture.kit.authentication.withCurrent(current, (context) =>
+              run({ ...context, account: { ...context.account, hasPassword: false } })
+            ),
+        } as typeof fixture.kit.authentication,
+      },
+      db: fixture.db,
+      config: defineConfig({ throttle: false }),
+      verifyPassword: async (hashedPassword, password) => {
+        hashed++
+        return hash.verify(hashedPassword, password)
+      },
+    })
+    assert.equal(
+      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      'E_PASSWORD_CONFIRMATION_DENIED'
+    )
     assert.equal(hashed, 0)
   })
 

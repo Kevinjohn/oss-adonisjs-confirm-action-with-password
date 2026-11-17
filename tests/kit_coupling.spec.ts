@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE.md
+ * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
  */
 
@@ -61,11 +61,16 @@ test.group('Account Kit coupling canary', (group) => {
         )
       }
     }
-    const foreignKeys: { table: string; to: string; on_delete: string }[] =
+    const foreignKeys: { from: string; table: string; to: string; on_delete: string }[] =
       await fixture.db.rawQuery(`pragma foreign_key_list(password_confirmations)`)
     assert.deepInclude(
-      foreignKeys.map(({ table, to, on_delete: onDelete }) => ({ table, to, onDelete })),
-      { table: 'account_sessions', to: 'id', onDelete: 'CASCADE' },
+      foreignKeys.map(({ from, table, to, on_delete: onDelete }) => ({
+        from,
+        table,
+        to,
+        onDelete,
+      })),
+      { from: 'sign_in_id', table: 'account_sessions', to: 'id', onDelete: 'CASCADE' },
       'KIT COUPLING: password_confirmations.sign_in_id must cascade from account_sessions.id'
     )
   })
