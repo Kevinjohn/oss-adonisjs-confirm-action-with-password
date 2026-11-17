@@ -1,3 +1,4 @@
+import { currentAccountInput } from '#services/current_account_input'
 import kit from '@kevinjohn/adonisjs-account-kit/services/main'
 import { errors } from '@kevinjohn/adonisjs-account-kit'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -70,10 +71,12 @@ export default class EmailChangesController {
     const { cancelCurrentPassword } = await ctx.request.validateUsing(cancelEmailChangeValidator)
     const user = ctx.auth.getUserOrFail()
     try {
+      const current = await currentAccountInput(ctx)
       await kit.emailPasswordManagement.updateProfile({
         actorId: user.id,
         currentPassword: cancelCurrentPassword,
         email: user.email,
+        keepCurrent: { sessionHandle: current.sessionHandle },
       })
     } catch (error) {
       if (

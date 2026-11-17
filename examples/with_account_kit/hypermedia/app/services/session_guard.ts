@@ -15,11 +15,11 @@ export function accountKitSessionGuard(ctx: HttpContext) {
       ctx.session.regenerate()
       await guard.login(await User.findOrFail(userId))
       ctx.session.put('accountKitRevision', revision ?? '')
-      if (handle) ctx.session.put('accountKitSessionHandle', handle)
+      if (handle) ctx.session.put('accountKitSession', handle)
       return undefined
     },
     previousHandle() {
-      return ctx.session.get('accountKitSessionHandle') as string | undefined
+      return ctx.session.get('accountKitSession') as string | undefined
     },
     async terminate() {
       await guard.logout()

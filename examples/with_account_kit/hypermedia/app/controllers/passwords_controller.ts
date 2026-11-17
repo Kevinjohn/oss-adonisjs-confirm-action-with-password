@@ -2,6 +2,7 @@ import kit from '@kevinjohn/adonisjs-account-kit/services/main'
 import { errors, passwordChangeRevision } from '@kevinjohn/adonisjs-account-kit'
 import type { HttpContext } from '@adonisjs/core/http'
 import { changePasswordValidator } from '#validators/account'
+import { currentAccountInput } from '#services/current_account_input'
 
 export default class PasswordsController {
   async edit({ view }: HttpContext) {
@@ -11,6 +12,7 @@ export default class PasswordsController {
   async update(ctx: HttpContext) {
     const { currentPassword, password } = await ctx.request.validateUsing(changePasswordValidator)
     const user = ctx.auth.getUserOrFail()
+    const current = await currentAccountInput(ctx)
     let notified = true
     let revision: string | null
     try {
@@ -18,6 +20,7 @@ export default class PasswordsController {
         actorId: user.id,
         currentPassword,
         newPassword: password,
+        keepCurrent: { sessionHandle: current.sessionHandle },
       }))
     } catch (error) {
       // The new password is already saved; only the notification or another follow-up failed.

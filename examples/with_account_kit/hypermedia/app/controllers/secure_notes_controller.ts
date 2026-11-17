@@ -28,7 +28,8 @@ export default class SecureNotesController {
       ctx.session.flash('error', 'Enter a note of 1 to 500 characters and your password.')
       return ctx.response.redirect().back()
     }
-    const input = currentAccountInput(ctx)
+    ctx.session.forget('pendingSecureNote')
+    const input = await currentAccountInput(ctx)
     let confirmationId: string
     try {
       const issued = await confirmations.confirmPassword(input, {
@@ -66,7 +67,7 @@ export default class SecureNotesController {
       ctx.session.flash('error', 'Confirm your password again before saving.')
       return ctx.response.redirect().toPath('/settings/secure-note')
     }
-    const input = currentAccountInput(ctx)
+    const input = await currentAccountInput(ctx)
     try {
       await confirmations.withConfirmation(
         input,

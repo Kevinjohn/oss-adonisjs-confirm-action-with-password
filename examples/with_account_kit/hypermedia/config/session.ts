@@ -1,6 +1,7 @@
 import env from '#start/env'
 import app from '@adonisjs/core/services/app'
 import { defineConfig, stores } from '@adonisjs/session'
+import { protectManagedSessionConfig } from '@kevinjohn/adonisjs-account-kit/http'
 
 /**
  * Session configuration.
@@ -79,4 +80,6 @@ const sessionConfig = defineConfig({
   },
 })
 
-export default sessionConfig
+export default protectManagedSessionConfig(sessionConfig, {
+  verifyStore: (store) => store?.constructor.name === 'DatabaseStore',
+})

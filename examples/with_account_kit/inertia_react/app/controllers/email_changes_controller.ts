@@ -1,3 +1,4 @@
+import { currentAccountInput } from '#services/current_account_input'
 import kit from '@kevinjohn/adonisjs-account-kit/services/main'
 import { errors } from '@kevinjohn/adonisjs-account-kit'
 import type { HttpContext } from '@adonisjs/core/http'
@@ -57,13 +58,16 @@ export default class EmailChangesController {
     return response.redirect().toRoute('email_changes.edit')
   }
 
-  async cancel({ auth, request, response, session }: HttpContext) {
+  async cancel(ctx: HttpContext) {
+    const { auth, request, response, session } = ctx
     const { cancelCurrentPassword } = await request.validateUsing(cancelEmailChangeValidator)
     const user = auth.getUserOrFail()
+    const current = await currentAccountInput(ctx)
     await kit.emailPasswordManagement.updateProfile({
       actorId: user.id,
       currentPassword: cancelCurrentPassword,
       email: user.email,
+      keepCurrent: { sessionHandle: current.sessionHandle },
     })
     session.flash('success', 'The pending address change was canceled.')
     return response.redirect().toRoute('email_changes.edit')

@@ -66,3 +66,7 @@ jobs:
           PLAYWRIGHT_CLI=$(node -p "require('node:path').join(require('node:path').dirname(require.resolve('playwright/package.json', {paths:[require.resolve('@japa/browser-client')]})), 'cli.js')")
           node "$PLAYWRIGHT_CLI" install --with-deps chromium
       - run: pnpm exec node ace test --suites browser --files tests/browser/secure_note_journey.spec.ts
+      - if: matrix.app == 'hypermedia'
+        run: pnpm exec node ace test --suites browser --files tests/browser/account_journey.spec.ts
+      - if: matrix.app != 'hypermedia'
+        run: pnpm exec node ace test --suites browser --files tests/browser/account_journeys.spec.ts

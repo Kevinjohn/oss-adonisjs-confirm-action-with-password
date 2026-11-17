@@ -3,6 +3,7 @@ import kit from '@kevinjohn/adonisjs-account-kit/services/main'
 import { errors } from '@kevinjohn/adonisjs-account-kit'
 import type { HttpContext } from '@adonisjs/core/http'
 import { updateProfileValidator } from '#validators/profile'
+import { currentAccountInput } from '#services/current_account_input'
 
 export default class ProfileController {
   async edit({ auth, view }: HttpContext) {
@@ -13,10 +14,12 @@ export default class ProfileController {
   async update(ctx: HttpContext) {
     const { fullName, currentPassword } = await ctx.request.validateUsing(updateProfileValidator)
     try {
+      const current = await currentAccountInput(ctx)
       await kit.emailPasswordManagement.updateProfile({
         actorId: ctx.auth.getUserOrFail().id,
         currentPassword,
         registrationData: { fullName },
+        keepCurrent: { sessionHandle: current.sessionHandle },
       })
     } catch (error) {
       if (

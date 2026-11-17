@@ -1,3 +1,4 @@
+import { currentAccountInput } from '#services/current_account_input'
 import { assert } from '@japa/assert'
 import app from '@adonisjs/core/services/app'
 import db from '@adonisjs/lucid/services/db'
@@ -72,12 +73,8 @@ export const runnerHooks: Required<Pick<Config, 'setup' | 'teardown'>> = {
       // browser suites in a full run, so browser-suite setup would register this route too late.
       router
         .get('/__test__/confirmed-account', async (ctx) => {
-          const revision = ctx.session.get('accountKitRevision')
           try {
-            const account = await kit.authentication.requireActive({
-              userId: ctx.auth.getUserOrFail().id,
-              ...(revision === undefined ? {} : { revision: revision === '' ? null : revision }),
-            })
+            const account = await kit.authentication.requireActive(await currentAccountInput(ctx))
             return ctx.response.ok({ userId: account.id })
           } catch (error) {
             if (!(error instanceof errors.UnverifiedEmailError)) throw error

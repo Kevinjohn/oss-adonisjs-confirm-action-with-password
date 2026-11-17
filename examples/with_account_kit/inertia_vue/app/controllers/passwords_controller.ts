@@ -2,6 +2,7 @@ import kit from '@kevinjohn/adonisjs-account-kit/services/main'
 import { errors, passwordChangeRevision } from '@kevinjohn/adonisjs-account-kit'
 import type { HttpContext } from '@adonisjs/core/http'
 import { changePasswordValidator } from '#validators/account'
+import { currentAccountInput } from '#services/current_account_input'
 
 export default class PasswordsController {
   async edit({ inertia }: HttpContext) {
@@ -15,6 +16,7 @@ export default class PasswordsController {
   async update(ctx: HttpContext) {
     const { currentPassword, password } = await ctx.request.validateUsing(changePasswordValidator)
     const user = ctx.auth.getUserOrFail()
+    const current = await currentAccountInput(ctx)
     let revision: string | null
     let followUp = ''
     try {
@@ -22,6 +24,7 @@ export default class PasswordsController {
         actorId: user.id,
         currentPassword,
         newPassword: password,
+        keepCurrent: { sessionHandle: current.sessionHandle },
       }))
     } catch (error) {
       // A follow-up failed after commit: the change stands, so keep this session on its revision.
