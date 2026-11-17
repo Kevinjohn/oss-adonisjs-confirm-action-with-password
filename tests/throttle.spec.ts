@@ -505,6 +505,30 @@ test.group('Wrong-password throttling', (group) => {
     for (const key of keys) assert.isAtMost(key.length, 95)
   })
 
+  test('a block shorter than the counting window ends when it says it will', async ({ assert }) => {
+    const confirmations = fixture.confirmations({
+      throttle: { requests: 2, duration: '1 minute', blockDuration: '1s' },
+    })
+    const { input } = await signedIn()
+    for (let i = 0; i < 2; i++) {
+      assert.equal(
+        await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
+        'E_PASSWORD_CONFIRMATION_DENIED'
+      )
+    }
+    const blocked = await confirmations
+      .confirmPassword(input, { ...request, password: PW })
+      .catch((e) => e)
+    assert.equal(blocked.code, 'E_PASSWORD_CONFIRMATION_THROTTLED')
+    assert.isAtMost(blocked.retryAfterSeconds, 1)
+    // This wait measures the block's own time-to-live; the counting window has 58 s left.
+    await new Promise((resolve) => setTimeout(resolve, 1_500))
+    assert.equal(
+      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      'resolved'
+    )
+  })
+
   test('a throttled retry during the block never extends it', async ({ assert }) => {
     const confirmations = fixture.confirmations({
       throttle: { requests: 2, duration: '1s', blockDuration: '2s' },

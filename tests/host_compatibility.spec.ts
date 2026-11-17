@@ -98,7 +98,9 @@ test.group('host database compatibility', (group) => {
       )
     }
     // Five completed failures across both sign-ins arm one block, stored in the host's table.
-    assert.equal((await budget.get(keys.failed))!.consumed, 5)
+    // Arming the block clears the counters: the block alone decides until it lapses.
+    assert.isNull(await budget.get(keys.failed))
+    assert.isNull(await budget.get(keys.attempts))
     assert.isAbove((await budget.get(keys.blocked))!.availableIn, 60)
     await fixture.db.from('rate_limits').where('key', 'like', `%${keys.blocked}`).firstOrFail()
     for (const session of [input, secondSignIn]) {

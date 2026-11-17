@@ -133,11 +133,17 @@ export class PasswordConfirmations {
    * completed. Checks still in flight are not failures: they do not arm the block. The block has
    * its own key, so a throttled retry never extends it.
    */
-  async #countFailure(keys: { failed: string; blocked: string }) {
+  async #countFailure(keys: { attempts: string; failed: string; blocked: string }) {
     const throttle = this.#config.throttle
     const failed = await this.#throttle!.increment(keys.failed)
     if (throttle && failed.consumed >= throttle.requests) {
       await this.#throttle!.set(keys.blocked, 1, throttle.blockDuration)
+      // From here the block alone decides, for exactly blockDuration. Left in place, a spent
+      // budget would keep refusing after a block shorter than the counting window had lapsed.
+      await Promise.all([
+        this.#throttle!.delete(keys.attempts),
+        this.#throttle!.delete(keys.failed),
+      ])
     }
   }
 
@@ -213,8 +219,12 @@ export class PasswordConfirmations {
     // The window runs from the check itself, not from the limiter reset that follows it.
     const verifiedAt = this.#now()
     if (this.#throttle) {
-      // A correct password resets the budget, and lifts a block armed while this check was in flight.
-      await Promise.all(Object.values(throttleKeys).map((key) => this.#throttle!.delete(key)))
+      // A correct password resets the budget. No block can exist here: arming one takes `requests`
+      // completed failures, and this check held one of the `requests` slots.
+      await Promise.all([
+        this.#throttle.delete(throttleKeys.attempts),
+        this.#throttle.delete(throttleKeys.failed),
+      ])
     }
 
     return this.#kit.authentication.withCurrent(current, async (context) => {
