@@ -8,7 +8,7 @@ import {
 } from './check_changed_plan.js'
 
 const root = fileURLToPath(new URL('../', import.meta.url))
-const stepLimitMs = 15 * 60 * 1000
+const stepLimitMs = Number(process.env.CHECK_CHANGED_STEP_LIMIT_MS) || 15 * 60 * 1000
 const termGraceMs = 5000
 const reapGraceMs = 5000
 const outputKeep = 256 * 1024
@@ -17,6 +17,8 @@ let interruptedBy: NodeJS.Signals | undefined
 let interruptionCleanup: Promise<void> | undefined
 const signalErrors: unknown[] = []
 let abandonActive: ((error: unknown) => void) | undefined
+/** A timed-out step whose process group could not be shown gone: later steps must not start. */
+let ownershipUnresolved = false
 
 function describeError(error: unknown): string {
   if (error instanceof AggregateError) {
@@ -167,6 +169,7 @@ function run(
     let output = ''
     let spawnError: Error | undefined
     let timedOut = false
+    let closeWait: NodeJS.Timeout | undefined
     // Keep a bounded tail: the summary line and the 40 printed lines are at the end.
     const append = (chunk: Buffer | string) => {
       output += chunk
@@ -177,22 +180,33 @@ function run(
     const timer = setTimeout(() => {
       timedOut = true
       output += `\n[check:changed] stopped after ${stepLimitMs / 60000} minutes\n`
-      try {
-        signalOwnedProcess(child, 'SIGKILL')
-      } catch (error) {
-        output += `[check:changed] timeout cleanup failed: ${describeError(error)}\n`
-      }
+      terminateOwnedProcess(child).then(
+        () => {
+          if (settled) return
+          // The group is gone, but an escaped descendant can still hold the pipes open.
+          closeWait = setTimeout(() => {
+            ownershipUnresolved = true
+            abandon(new Error('No close event after the deadline kill.'))
+          }, reapGraceMs)
+        },
+        (error) => {
+          ownershipUnresolved = true
+          abandon(error)
+        }
+      )
     }, stepLimitMs)
     child.once('error', (error) => {
       spawnError = error
     })
     let settled = false
-    abandonActive = (error) => {
+    const abandon = (error: unknown) => {
+      if (settled) return
       child.stdout.destroy()
       child.stderr.destroy()
       child.unref()
       void finish(null, null, error)
     }
+    abandonActive = abandon
     const finish = async (
       status: number | null,
       signal: NodeJS.Signals | null,
@@ -201,6 +215,7 @@ function run(
       if (settled) return
       settled = true
       clearTimeout(timer)
+      clearTimeout(closeWait)
       let cleanupError: unknown = terminalError
       if (interruptedBy && interruptionCleanup) {
         try {
@@ -238,7 +253,7 @@ const changes = changedFiles(base)
 console.log(`[check:changed] ${changes.length} changed files since the merge-base with ${base}`)
 let failed = false
 for (const step of planChangedChecks(changes, { static: flags.includes('--static') })) {
-  if (interruptedBy) break
+  if (interruptedBy || ownershipUnresolved) break
   if ('skip' in step) {
     console.log(`skip ${step.label} (${step.skip})`)
     continue

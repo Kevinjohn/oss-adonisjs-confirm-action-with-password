@@ -232,3 +232,44 @@ test('keeps a bounded tail of a step that prints far more than the heap allows',
   assert.equal(result.code, 0, result.text.slice(-2000))
   assert.match(result.text, /pass format/)
 }).timeout(60_000)
+
+test('a step past its deadline whose group cannot be killed is abandoned and stops later checks', async ({
+  cleanup,
+}) => {
+  const f = await fixture()
+  cleanup(() => rm(f.directory, { recursive: true, force: true }))
+  const hook = path.join(f.directory, 'never-close.cjs')
+  await writeFile(
+    hook,
+    `
+const cp = require('node:child_process')
+const fs = require('node:fs')
+const { EventEmitter } = require('node:events')
+const { PassThrough } = require('node:stream')
+cp.spawn = (command, args) => {
+ fs.appendFileSync(${JSON.stringify(f.log)}, args.join(' ') + '\\n')
+ const child = new EventEmitter(); child.pid = 99999999; child.exitCode = child.signalCode = null
+ child.stdout = new PassThrough(); child.stderr = new PassThrough()
+ const liveHandle = setInterval(() => {}, 1000)
+ child.unref = () => { clearInterval(liveHandle); console.log('LOCAL_HANDLE_RELEASED') }
+ return child
+}
+process.kill = () => { throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' }) }
+let clock = 0; Date.now = () => (clock += 6000)
+require('node:module').syncBuiltinESMExports()
+`
+  )
+  f.env.NODE_OPTIONS = `${f.env.NODE_OPTIONS ?? ''} --require=${hook}`
+  f.env.CHECK_CHANGED_STEP_LIMIT_MS = '50'
+  const child = launch(f)
+  cleanup(() => void child.kill('SIGKILL'))
+  const output = await outputOf(child)
+  const result = await collectExit(child, output)
+  assert.equal(result.code, 1, result.text)
+  assert.match(result.text, /fail format \(exit killed\)/)
+  assert.match(result.text, /cleanup failed:.*kill EPERM/s)
+  assert.match(result.text, /LOCAL_HANDLE_RELEASED/)
+  const log = await readFile(f.log, 'utf8')
+  assert.match(log, /^exec prettier --check/m)
+  assert.doesNotMatch(log, laterSteps)
+}).timeout(10_000)
