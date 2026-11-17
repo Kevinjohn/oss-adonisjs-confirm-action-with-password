@@ -5,7 +5,13 @@ import { spawn, type ChildProcess } from 'node:child_process'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from '@japa/runner'
-import { collectExit, isAlive, outputOf, waitForFile } from '../helpers/child_process.js'
+import {
+  collectExit,
+  isAlive,
+  outputOf,
+  waitForFile,
+  waitForPid,
+} from '../helpers/child_process.js'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
@@ -64,7 +70,7 @@ async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
 
   await writeFile(
     path.join(root, 'worker.js'),
-    `import { writeFile } from 'node:fs/promises'\nprocess.on('SIGTERM', () => {})\nawait writeFile(${JSON.stringify(ready)}, String(process.pid))\nsetInterval(() => {}, 1000)\n`
+    `import { rename, writeFile } from 'node:fs/promises'\nprocess.on('SIGTERM', () => {})\nawait writeFile(${JSON.stringify(ready + '.tmp')}, String(process.pid))\nawait rename(${JSON.stringify(ready + '.tmp')}, ${JSON.stringify(ready)})\nsetInterval(() => {}, 1000)\n`
   )
   if (options.command !== 'missing') {
     const commandPath = path.join(bin, 'pnpm')
@@ -99,12 +105,33 @@ async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
   return { directory, root, bin, log, ready, termSent, base, env }
 }
 
-function launch(f: Fixture): ChildProcess {
-  return spawn(
+/** Start the runner in its own process group and own it, and anything it starts, from now on. */
+function launch(f: Fixture, cleanup: (fn: () => void | Promise<void>) => void): ChildProcess {
+  const child = spawn(
     process.execPath,
     ['--import=@poppinss/ts-exec', path.join(f.root, 'bin/check_changed.ts'), '--static', f.base],
-    { cwd: f.root, env: f.env, stdio: ['ignore', 'pipe', 'pipe'] }
+    { cwd: f.root, env: f.env, stdio: ['ignore', 'pipe', 'pipe'], detached: true }
   )
+  cleanup(() => {
+    try {
+      process.kill(-child.pid!, 'SIGKILL')
+    } catch {}
+  })
+  return child
+}
+
+/** Wait for the hanging step's worker and own it: it runs in a process group of its own. */
+async function ownDescendant(
+  f: Fixture,
+  cleanup: (fn: () => void | Promise<void>) => void
+): Promise<number> {
+  const pid = await waitForPid(f.ready)
+  cleanup(() => {
+    try {
+      process.kill(pid, 'SIGKILL')
+    } catch {}
+  })
+  return pid
 }
 
 test('runs selected static checks normally and observes a missing command spawn error', async ({
@@ -112,7 +139,7 @@ test('runs selected static checks normally and observes a missing command spawn 
 }) => {
   const normal = await fixture()
   cleanup(() => rm(normal.directory, { recursive: true, force: true }))
-  const normalChild = launch(normal)
+  const normalChild = launch(normal, cleanup)
   const normalOutput = await outputOf(normalChild)
   const normalResult = await collectExit(normalChild, normalOutput)
   assert.equal(normalResult.code, 0, normalResult.text)
@@ -124,7 +151,7 @@ test('runs selected static checks normally and observes a missing command spawn 
 
   const missing = await fixture({ command: 'missing' })
   cleanup(() => rm(missing.directory, { recursive: true, force: true }))
-  const missingChild = launch(missing)
+  const missingChild = launch(missing, cleanup)
   const missingOutput = await outputOf(missingChild)
   const missingResult = await collectExit(missingChild, missingOutput)
   assert.equal(missingResult.code, 1, missingResult.text)
@@ -137,10 +164,9 @@ test('TERM-resistant descendants receive KILL, are reaped, and block later selec
 }) => {
   const f = await fixture({ command: 'hang' })
   cleanup(() => rm(f.directory, { recursive: true, force: true }))
-  const child = launch(f)
+  const child = launch(f, cleanup)
   const output = await outputOf(child)
-  await waitForFile(f.ready)
-  const descendantPid = Number(await readFile(f.ready, 'utf8'))
+  const descendantPid = await ownDescendant(f, cleanup)
   child.kill('SIGTERM')
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
@@ -155,10 +181,9 @@ test('a second signal escalates immediately while the first signal determines th
 }) => {
   const f = await fixture({ command: 'hang', hook: 'record-term' })
   cleanup(() => rm(f.directory, { recursive: true, force: true }))
-  const child = launch(f)
+  const child = launch(f, cleanup)
   const output = await outputOf(child)
-  await waitForFile(f.ready)
-  const descendantPid = Number(await readFile(f.ready, 'utf8'))
+  const descendantPid = await ownDescendant(f, cleanup)
   child.kill('SIGTERM')
   await waitForFile(f.termSent)
   child.kill('SIGINT')
@@ -171,9 +196,9 @@ test('a second signal escalates immediately while the first signal determines th
 test('reports failed final reap and retains the first signal result', async ({ cleanup }) => {
   const f = await fixture({ command: 'hang', hook: 'fail-reap' })
   cleanup(() => rm(f.directory, { recursive: true, force: true }))
-  const child = launch(f)
+  const child = launch(f, cleanup)
   const output = await outputOf(child)
-  await waitForFile(f.ready)
+  await ownDescendant(f, cleanup)
   child.kill('SIGTERM')
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
@@ -208,7 +233,7 @@ require('node:module').syncBuiltinESMExports()
 `
   )
   f.env.NODE_OPTIONS = `${f.env.NODE_OPTIONS ?? ''} --require=${hook}`
-  const child = launch(f)
+  const child = launch(f, cleanup)
   const output = await outputOf(child)
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
@@ -226,7 +251,7 @@ test('keeps a bounded tail of a step that prints far more than the heap allows',
   // 256 MiB of output against a 64 MiB heap: an unbounded buffer runs out of memory.
   f.env.CHECK_CHANGED_FLOOD = '256'
   f.env.NODE_OPTIONS = `${f.env.NODE_OPTIONS ?? ''} --max-old-space-size=64`
-  const child = launch(f)
+  const child = launch(f, cleanup)
   const output = await outputOf(child)
   const result = await collectExit(child, output)
   assert.equal(result.code, 0, result.text.slice(-2000))
@@ -261,8 +286,7 @@ require('node:module').syncBuiltinESMExports()
   )
   f.env.NODE_OPTIONS = `${f.env.NODE_OPTIONS ?? ''} --require=${hook}`
   f.env.CHECK_CHANGED_STEP_LIMIT_MS = '50'
-  const child = launch(f)
-  cleanup(() => void child.kill('SIGKILL'))
+  const child = launch(f, cleanup)
   const output = await outputOf(child)
   const result = await collectExit(child, output)
   assert.equal(result.code, 1, result.text)
