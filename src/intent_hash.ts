@@ -16,7 +16,10 @@ const MAX_NAME = 255
 /**
  * Canonical JSON: keys sorted by UTF-16 code unit, JSON values only. Anything JSON cannot round
  * trip (undefined, functions, non-finite numbers, Dates, class instances) is refused rather than
- * coerced, so two different requests never share a hash. `__proto__` is an ordinary own key.
+ * coerced. What is hashed is the JSON projection: own enumerable string keys of plain objects and
+ * the indexed elements of arrays. Symbol keys, non-enumerable properties and extra named
+ * properties on an array are not part of it, so two values that differ only there share a hash.
+ * `__proto__` is an ordinary own key.
  */
 function canonical(value: unknown, depth = 0): string {
   if (depth > 32)
@@ -28,8 +31,9 @@ function canonical(value: unknown, depth = 0): string {
     if (!Number.isFinite(value))
       throw new InvalidPasswordConfirmationRequestException('non-finite number')
     // Integers past 2^53 have already lost precision, so distinct ids could share a hash; send them
-    // as strings. -0 hashes as 0 on purpose (JSON.stringify gives "0"): -0 === 0, so no action can
-    // tell them apart, and a confirmation for one may be spent with the other.
+    // as strings. -0 hashes as 0 on purpose: canonical JSON writes both as "0", so a confirmation
+    // for one may be spent with the other. Code can still tell them apart (Object.is, 1 / x), so an
+    // action whose meaning depends on the sign must send it as a string.
     if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
       throw new InvalidPasswordConfirmationRequestException('unsafe integer; send it as a string')
     }

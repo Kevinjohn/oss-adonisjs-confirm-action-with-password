@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 0.2.0 - 2026-11-17
+
+- The README covers resource authorization in the transfer example, the low-level `consume` call,
+  what `intent` binds, separate `Origin` and `Sec-Fetch-Site` checks, shared limiter storage, a
+  host-throttling example that keeps only wrong passwords, the two Kit verifier signatures,
+  retry-safe callbacks, committed-error recovery, custom session guard wiring and configure reruns.
+
 - Breaking: the confirmations table has a new NOT NULL `expires_at` column holding the deadline
   returned by `confirmPassword`. Spend, issue-time cleanup and `prune()` use it, so a longer
   `window` configured later cannot revive a confirmation; a shorter one still applies at once.
