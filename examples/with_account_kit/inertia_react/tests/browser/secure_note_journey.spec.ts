@@ -25,6 +25,7 @@ test.group('secure note confirmation', (group) => {
     )
     await page.getByRole('button', { name: 'Confirm password' }).click()
     await rejected
+    await page.getByText('The password is incorrect.').waitFor()
     const beforeSave = await db.from('secure_notes')
     assert.equal(beforeSave.length, 0)
     await page.goto('/settings/secure-note')

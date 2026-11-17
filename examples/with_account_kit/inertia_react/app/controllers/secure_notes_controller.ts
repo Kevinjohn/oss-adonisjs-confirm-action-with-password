@@ -1,6 +1,7 @@
 import type { HttpContext } from '@adonisjs/core/http'
 import db from '@adonisjs/lucid/services/db'
 import confirmations from '@kevinjohn/adonisjs-confirm-action-with-password/services/main'
+import { errors } from '@kevinjohn/adonisjs-confirm-action-with-password'
 import { currentAccountInput } from '#services/current_account_input'
 
 function noteRequest(userId: number | string, body: string) {
@@ -28,11 +29,29 @@ export default class SecureNotesController {
       return ctx.response.redirect().back()
     }
     const input = currentAccountInput(ctx)
-    const issued = await confirmations.confirmPassword(input, {
-      ...noteRequest(input.userId, body),
-      password,
-    })
-    ctx.session.put('pendingSecureNote', { body, confirmationId: issued.confirmationId })
+    let confirmationId: string
+    try {
+      const issued = await confirmations.confirmPassword(input, {
+        ...noteRequest(input.userId, body),
+        password,
+      })
+      confirmationId = issued.confirmationId
+    } catch (error) {
+      if (error instanceof errors.PasswordConfirmationDeniedException) {
+        ctx.session.flash('error', 'The password is incorrect.')
+        return ctx.response.redirect().back()
+      }
+      if (error instanceof errors.PasswordConfirmationThrottledException) {
+        ctx.session.flash('error', 'Too many attempts. Wait before trying again.')
+        return ctx.response.redirect().back()
+      }
+      if (error instanceof errors.PasswordConfirmationStaleException) {
+        ctx.session.flash('error', 'Confirmation timed out. Try again.')
+        return ctx.response.redirect().back()
+      }
+      throw error
+    }
+    ctx.session.put('pendingSecureNote', { body, confirmationId })
     return ctx.response.redirect().toPath('/settings/secure-note')
   }
 
@@ -48,17 +67,32 @@ export default class SecureNotesController {
       return ctx.response.redirect().toPath('/settings/secure-note')
     }
     const input = currentAccountInput(ctx)
-    await confirmations.withConfirmation(
-      input,
-      { ...noteRequest(input.userId, pending.body), confirmationId: pending.confirmationId },
-      async ({ trx }) => {
-        await trx
-          .table('secure_notes')
-          .insert({ user_id: input.userId, body: pending.body })
-          .onConflict('user_id')
-          .merge()
+    try {
+      await confirmations.withConfirmation(
+        input,
+        { ...noteRequest(input.userId, pending.body), confirmationId: pending.confirmationId },
+        async ({ trx }) => {
+          await trx
+            .table('secure_notes')
+            .insert({ user_id: input.userId, body: pending.body })
+            .onConflict('user_id')
+            .merge()
+        }
+      )
+    } catch (error) {
+      if (
+        error instanceof errors.PasswordConfirmationRequiredException ||
+        error instanceof errors.PasswordConfirmationStaleException
+      ) {
+        ctx.session.forget('pendingSecureNote')
+        ctx.session.flash(
+          'error',
+          'Confirmation expired or was already used. Confirm your password again.'
+        )
+        return ctx.response.redirect().toPath('/settings/secure-note')
       }
-    )
+      throw error
+    }
     ctx.session.forget('pendingSecureNote')
     ctx.session.flash('success', 'Secure note saved.')
     return ctx.response.redirect().toPath('/settings/secure-note')
