@@ -98,6 +98,59 @@ test.group('configure', () => {
     assert.match(written.join(''), /configure @kevinjohn\/adonisjs-account-kit first/)
   }).timeout(30_000)
 
+  test('a rerun with other flags warns about the files it leaves alone and changes nothing', async ({
+    assert,
+  }) => {
+    const { root, ignitor } = await configuredAppRoot()
+    const written: string[] = []
+    const write = process.stdout.write.bind(process.stdout)
+    const capture = async (flags: string[]) => {
+      written.length = 0
+      process.stdout.write = ((chunk: string) => {
+        written.push(String(chunk))
+        return true
+      }) as typeof process.stdout.write
+      try {
+        await ignitor
+          .ace()
+          .handle(['configure', '@kevinjohn/adonisjs-confirm-action-with-password', ...flags])
+      } finally {
+        process.stdout.write = write
+      }
+      return written.join('')
+    }
+    try {
+      const migrations = join(root, 'database/migrations')
+      const names = await readdir(migrations)
+      const file = names.find((name) => name.endsWith('_create_password_confirmations_table.ts'))!
+      const before = [
+        await readFile(join(root, 'config/password_confirmations.ts'), 'utf8'),
+        await readFile(join(migrations, file), 'utf8'),
+      ]
+      // The same flags again: nothing to report.
+      assert.notMatch(await capture([]), /does not match/)
+      const output = await capture(['--table=sensitive_confirmations'])
+      assert.match(output, /config\/password_confirmations\.ts already exists and does not match/)
+      assert.match(
+        output,
+        /_create_password_confirmations_table\.ts already exists and does not match/
+      )
+      assert.match(
+        await capture(['--user-id-type=uuid']),
+        /--user-id-type uuid; it was left unchanged/
+      )
+      assert.deepEqual(
+        [
+          await readFile(join(root, 'config/password_confirmations.ts'), 'utf8'),
+          await readFile(join(migrations, file), 'utf8'),
+        ],
+        before
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }).timeout(30_000)
+
   test('the migration sorts after an Account Kit migration dated ahead of the clock', async ({
     assert,
   }) => {

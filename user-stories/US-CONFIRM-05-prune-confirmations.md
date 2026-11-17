@@ -11,7 +11,7 @@ As an application operator, I want to remove spent and expired confirmations so 
 
 ## Acceptance criteria
 
-- `prune()` deletes rows whose `verified_at` is at or before the configured window cutoff, plus rows with a non-null `consumed_at`.
+- `prune()` deletes rows whose stored `expires_at` deadline has passed, plus rows with a non-null `consumed_at`. The deadline is fixed at issue, so the window configured for the pruning process does not change which rows are expired.
 - The method returns the number of deleted rows. The host chooses and schedules a cadence appropriate to its storage and operations.
 
 ## User flow
@@ -28,7 +28,7 @@ Scope: package deletion method; scheduler and cadence are host-owned.
 
 ```mermaid
 flowchart TD
-    A["Host scheduler calls PasswordConfirmations.prune"] --> B["Calculate cutoff from now and configured window"]
+    A["Host scheduler calls PasswordConfirmations.prune"] --> B["Read the current time"]
     B --> C["Delete rows at/before cutoff or with consumed_at"]
     C --> D["Return affected row count"]
 ```
