@@ -9,7 +9,7 @@
 
 import type { Trx, UserId, CurrentAccount } from '@kevinjohn/adonisjs-account-kit/types'
 
-/** What `authentication.withCurrent` hands its callback in Account Kit 0.4.0. */
+/** What `authentication.withCurrent` hands its callback in Account Kit 0.4.0. Never construct one. */
 export interface KitContext {
   account: CurrentAccount
   signInId?: number
@@ -22,7 +22,10 @@ export interface ConfirmationRequest {
   action: string
   /** The resource the action applies to, such as a company id. */
   scope: string
-  /** The exact operation contents. JSON values only; bound by a canonical SHA-256 hash. */
+  /**
+   * The exact operation contents. JSON values only; bound by a canonical SHA-256 hash of its JSON
+   * projection. Keep it small and do not change it after the call starts.
+   */
   intent: unknown
 }
 
@@ -59,7 +62,9 @@ export interface PasswordConfirmationsConfig {
   usersTable?: string
   /**
    * Reads the stored password hash through the Kit transaction. Default: the `password` column of
-   * `usersTable`, which every Account Kit users adapter requires.
+   * `usersTable`, where Account Kit's SQL and Lucid adapters keep it; set this with a custom
+   * `UsersAdapter` that stores it elsewhere. Use `trx` only, no side effects: it may run again on a
+   * retry.
    */
   readPasswordHash?: (userId: UserId, trx: Trx) => Promise<string | null>
   /**
@@ -68,7 +73,11 @@ export interface PasswordConfirmationsConfig {
    * `AggregateError` carrying both faults, with the throw as `cause`, if the refund fails too).
    */
   verifyPassword?: (hashed: string, password: string) => Promise<boolean>
-  /** Host policy such as "only the owner, never while masquerading". Default allows. */
+  /**
+   * Host policy such as "only the owner, never while masquerading". Default allows. Use
+   * `context.trx` only, no side effects: it runs at both issuance stages, at spend, and again on a
+   * retry. Treat `request.intent` as read-only.
+   */
   authorize?: AuthorizeConfirmation
   /**
    * Failed password confirmations allowed per account through the app's `@adonisjs/limiter`
