@@ -173,10 +173,15 @@ export interface Fixture {
 
 /** Boots a real AdonisJS app with Lucid, the limiter, Account Kit 0.4.0 and this package. */
 export async function bootFixture(
-  options: { strategy?: 'session' | 'access_tokens'; hostProfile?: boolean } = {}
+  options: {
+    strategy?: 'session' | 'access_tokens'
+    hostProfile?: boolean
+    prepareMigrations?: (root: string) => Promise<void>
+  } = {}
 ): Promise<Fixture> {
   const tokens = options.strategy === 'access_tokens'
   const { root } = await configuredAppRoot(options.hostProfile)
+  await options.prepareMigrations?.(root)
   const mail = captureNotifications()
   const ignitor = new IgnitorFactory()
     .withCoreProviders()

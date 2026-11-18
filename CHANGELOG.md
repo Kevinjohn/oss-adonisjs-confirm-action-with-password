@@ -12,9 +12,8 @@
 - Breaking: the confirmations table has a new NOT NULL `expires_at` column holding the deadline
   returned by `confirmPassword`. Spend, issue-time cleanup and `prune()` use it, so a longer
   `window` configured later cannot revive a confirmation; a shorter one still applies at once.
-  New installs get the column from `configure`. An existing install adds it with a migration:
-  delete the rows (they live for the window at most), then
-  `table.bigInteger('expires_at').notNullable().defaultTo(0)` and `table.index(['expires_at'])`.
+  New installs get the column from `configure`. If your original migration has already run, use
+  the [upgrade migration below](#upgrade-the-confirmations-table-from-011).
 - Breaking: the account block now needs `throttle.requests` completed wrong passwords. Checks
   still in flight, and checks whose verifier threw, no longer count towards it. The block is kept
   under its own limiter key for exactly `blockDuration`, so a refund cannot open it and a refused
@@ -39,6 +38,37 @@
 
 - Require Account Kit `0.4.0` exactly. The three Kit storage details this package reads are
   unchanged in 0.4.0: the coupling canary and the revocation suite pass against it.
+
+### Upgrade the confirmations table from 0.1.1
+
+Create a new migration in your host application with a timestamp after the original confirmations
+migration. Set `tableName` to the configured `table` if you use a custom name. Run
+`node ace migration:run` before deploying the 0.2.0 service.
+
+```ts
+import { BaseSchema } from '@adonisjs/lucid/schema'
+
+export default class extends BaseSchema {
+  protected tableName = 'password_confirmations'
+
+  async up() {
+    this.defer(async (db) => {
+      await db.from(this.tableName).delete()
+    })
+    this.schema.alterTable(this.tableName, (table) => {
+      table.bigInteger('expires_at').notNullable().defaultTo(0)
+      table.index(['expires_at'])
+    })
+  }
+
+  async down() {
+    this.schema.alterTable(this.tableName, (table) => {
+      table.dropIndex(['expires_at'])
+      table.dropColumn('expires_at')
+    })
+  }
+}
+```
 
 ## 0.1.1 - 2026-11-10
 
