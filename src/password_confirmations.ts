@@ -45,6 +45,15 @@ export interface PasswordConfirmationsDependencies {
   now?: () => number
 }
 
+function snapshotCurrentAccount(input: CurrentAccountInput): CurrentAccountInput {
+  return {
+    userId: input.userId,
+    revision: input.revision,
+    tokenId: input.tokenId,
+    sessionHandle: input.sessionHandle,
+  }
+}
+
 function affected(result: unknown) {
   return Array.isArray(result) ? Number(result[0]) : Number(result)
 }
@@ -174,7 +183,7 @@ export class PasswordConfirmations {
   ): Promise<IssuedConfirmation> {
     // The Kit reads these fields on every call. A host that refreshes its credential object in
     // place must not move stage two onto another sign-in than the one whose hash was checked.
-    const current = { ...input }
+    const current = snapshotCurrentAccount(input)
     const binding = bindRequest(request)
     const first = await this.#kit.authentication.withCurrent(current, async (context) => {
       this.#signInId(context)
@@ -315,7 +324,7 @@ export class PasswordConfirmations {
     request: ConsumeRequest,
     run: (context: KitContext) => Promise<T>
   ): Promise<T> {
-    return this.#kit.authentication.withCurrent(input, async (context) => {
+    return this.#kit.authentication.withCurrent(snapshotCurrentAccount(input), async (context) => {
       await this.consume(context, request)
       return run(context)
     })
