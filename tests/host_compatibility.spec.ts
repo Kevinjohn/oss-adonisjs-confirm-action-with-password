@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
 import { test } from '@japa/runner'
 import type { Fixture } from './helpers.js'
-import { bootFixture } from './helpers.js'
+import { bootFixture, codeOf } from './helpers.js'
 
 const PW = 'pw-one-Original-7'
 const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
@@ -121,6 +121,50 @@ test.group('host database compatibility', (group) => {
     assert.isNull(await budget.get(otherKeys.failed))
     assert.isNull(await budget.get(otherKeys.attempts))
     assert.isAbove((await budget.get(keys.blocked))!.availableIn, 60)
+  })
+
+  test('two app instances observe the same database limiter block and isolate other accounts', async ({
+    assert,
+  }) => {
+    const peer = await bootFixture({ hostProfile: true, sharedRoot: fixture.root })
+    try {
+      const { email, input } = await signedIn()
+      const peerInput = await peer.login(email, PW)
+      const other = await signedIn()
+      const first = await fixture.app.container.make('password_confirmations')
+      const second = await peer.app.container.make('password_confirmations')
+      assert.notStrictEqual(
+        await fixture.app.container.make('limiter.manager'),
+        await peer.app.container.make('limiter.manager')
+      )
+
+      const incorrect = { ...request, password: 'wrong' }
+      for (let attempt = 0; attempt < 4; attempt++) {
+        assert.equal(
+          await codeOf(first.confirmPassword(input, incorrect)),
+          'E_PASSWORD_CONFIRMATION_DENIED'
+        )
+      }
+      // Await the failure that arms the block before either app reads the shared limiter again.
+      assert.equal(
+        await codeOf(second.confirmPassword(peerInput, incorrect)),
+        'E_PASSWORD_CONFIRMATION_DENIED'
+      )
+      const correct = { ...request, password: PW }
+      for (const [service, signIn] of [
+        [first, input],
+        [second, peerInput],
+      ] as const) {
+        assert.equal(
+          await codeOf(service.confirmPassword(signIn, correct)),
+          'E_PASSWORD_CONFIRMATION_THROTTLED'
+        )
+        const { confirmationId } = await service.confirmPassword(other.input, correct)
+        await service.withConfirmation(other.input, { ...request, confirmationId }, async () => {})
+      }
+    } finally {
+      await peer.close()
+    }
   })
 
   test('the database limiter reserves before hashing a concurrent burst with a pool of one', async ({
