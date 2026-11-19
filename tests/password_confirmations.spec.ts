@@ -72,6 +72,36 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     )
   })
 
+  test('issues and spends using prototype getters for the credential', async ({ assert }) => {
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
+    class Credential {
+      get userId() {
+        return input.userId
+      }
+      get revision() {
+        return input.revision
+      }
+      get tokenId() {
+        return undefined
+      }
+      get sessionHandle() {
+        return input.sessionHandle
+      }
+    }
+    const credential = new Credential()
+    const { confirmationId } = await confirmations.confirmPassword(credential, {
+      ...request,
+      password: PW,
+    })
+    const result = await confirmations.withConfirmation(
+      credential,
+      { ...request, confirmationId },
+      async () => 'spent'
+    )
+    assert.equal(result, 'spent')
+  })
+
   test('a wrong password issues nothing', async ({ assert }) => {
     const { input } = await signInTestUser()
     assert.equal(

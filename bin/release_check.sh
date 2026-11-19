@@ -20,8 +20,8 @@ TARBALL=$(ls tmp/release/*.tgz)
 # Load the packed layout, not the source: unpacked under tmp/release/node_modules, Node resolves
 # the peers from the repository's own install. ./services/main needs a booted app and is left out.
 # tmp/release/package.json stops the name resolving to the repository itself by self-reference.
-PACKAGE_DIRECTORY=tmp/release/node_modules/@kevinjohn/adonisjs-confirm-action-with-password
-mkdir -p "$(dirname "$PACKAGE_DIRECTORY")" && tar -xzf "$TARBALL" -C tmp/release && mv tmp/release/package "$PACKAGE_DIRECTORY"
+PKG=tmp/release/node_modules/@kevinjohn/adonisjs-confirm-action-with-password
+mkdir -p "$(dirname "$PKG")" && tar -xzf "$TARBALL" -C tmp/release && mv tmp/release/package "$PKG"
 echo '{"private":true}' > tmp/release/package.json
 (cd tmp/release && node --input-type=module -e "
   import { access } from 'node:fs/promises'
@@ -40,10 +40,14 @@ echo '{"private":true}' > tmp/release/package.json
     await access(join(main.stubsRoot, stub))
   console.log('packed layout ok')
 ")
+if ! DIGEST=$(shasum -a 256 "$TARBALL" | cut -d' ' -f1) || [[ ! "$DIGEST" =~ ^[[:xdigit:]]{64}$ ]]; then
+  echo "Could not calculate a valid SHA-256 digest for $TARBALL" >&2
+  exit 1
+fi
 GITHUB_REPOSITORY_PATH=${GITHUB_REPOSITORY:-$(git remote get-url origin | sed -E 's#.*github.com[:/]##; s#\.git$##')}
 awk -v h="## $VERSION - " 'index($0, h) == 1 {p=1; next} /^## / {p=0} p' CHANGELOG.md > tmp/release/notes.md
 printf '\n## Install\n\n```sh\npnpm add https://github.com/%s/releases/download/v%s/%s\n```\n\nSHA-256: `%s`\n' \
-  "$GITHUB_REPOSITORY_PATH" "$VERSION" "$(basename "$TARBALL")" "$(shasum -a 256 "$TARBALL" | cut -d' ' -f1)" >> tmp/release/notes.md
+  "$GITHUB_REPOSITORY_PATH" "$VERSION" "$(basename "$TARBALL")" "$DIGEST" >> tmp/release/notes.md
 if [ -n "${GITHUB_OUTPUT:-}" ]; then
   { echo "version=$VERSION"; echo "tarball=$(basename "$TARBALL")"; } >> "$GITHUB_OUTPUT"; fi
 echo "ready: v$VERSION $TARBALL"

@@ -320,3 +320,62 @@ require('node:module').syncBuiltinESMExports()
   assert.match(log, /^exec prettier --check/m)
   assert.doesNotMatch(log, laterSteps)
 }).timeout(10_000)
+
+for (const groupExits of [true, false]) {
+  test(`a timed-out child closes before cleanup finishes (group exits: ${groupExits})`, async ({
+    cleanup,
+  }) => {
+    const f = await makeCheckProcessFixture()
+    cleanup(() => rm(f.directory, { recursive: true, force: true }))
+    const hook = path.join(f.directory, 'close-during-timeout.cjs')
+    await writeFile(
+      hook,
+      `
+const cp = require('node:child_process')
+const { EventEmitter } = require('node:events')
+const { PassThrough } = require('node:stream')
+const spawn = cp.spawn
+const child = new EventEmitter()
+child.pid = 99999999
+child.stdout = new PassThrough()
+child.stderr = new PassThrough()
+child.unref = () => {}
+let firstSpawn = true
+let probes = 0
+let clock = 0
+Date.now = () => (clock += 6000)
+cp.spawn = (...args) => {
+  if (firstSpawn) { firstSpawn = false; return child }
+  console.log('NEXT_STEP_AFTER_PROBES=' + probes)
+  return spawn(...args)
+}
+process.kill = (pid, signal) => {
+  if (pid !== -child.pid) throw new Error('unexpected process group')
+  if (signal === 'SIGTERM') { child.emit('close', null, 'SIGTERM'); return true }
+  if (signal === 'SIGKILL') return true
+  if (signal !== 0) throw new Error('unexpected signal')
+  ++probes
+  if (!${groupExits} || probes === 1) return true
+  throw Object.assign(new Error('gone'), { code: 'ESRCH' })
+}
+require('node:module').syncBuiltinESMExports()
+`
+    )
+    f.environment.NODE_OPTIONS = `--require=${hook}`
+    f.environment.CHECK_CHANGED_STEP_LIMIT_MS = '1000'
+    const child = launch(f, cleanup)
+    const output = await captureChildOutput(child)
+    const result = await collectExit(child, output)
+    assert.equal(result.code, 1, result.text)
+    assert.match(result.text, /fail format \(exit killed\)/)
+    if (groupExits) {
+      assert.match(result.text, /NEXT_STEP_AFTER_PROBES=2/)
+      assert.doesNotMatch(result.text, /NEXT_STEP_AFTER_PROBES=[01]/)
+      assert.match(result.text, /pass lint/)
+    } else {
+      assert.match(result.text, /cleanup failed:[\s\S]*did not exit after SIGKILL/)
+      assert.doesNotMatch(result.text, /NEXT_STEP_AFTER_PROBES/)
+      assert.equal(await readFile(f.log, 'utf8'), '')
+    }
+  }).timeout(10_000)
+}

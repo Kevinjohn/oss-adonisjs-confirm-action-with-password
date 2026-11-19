@@ -176,11 +176,14 @@ export async function bootFixture(
   options: {
     strategy?: 'session' | 'access_tokens'
     hostProfile?: boolean
+    sharedRoot?: string
     prepareMigrations?: (root: string) => Promise<void>
   } = {}
 ): Promise<Fixture> {
   const tokens = options.strategy === 'access_tokens'
-  const { root } = await prepareConfiguredAppRoot(options.hostProfile)
+  const { root } = options.sharedRoot
+    ? { root: options.sharedRoot }
+    : await prepareConfiguredAppRoot(options.hostProfile)
   await options.prepareMigrations?.(root)
   const mail = captureNotifications()
   const ignitor = new IgnitorFactory()
@@ -311,7 +314,7 @@ export async function bootFixture(
     },
     async close() {
       await app.terminate()
-      await rm(root, { recursive: true, force: true })
+      if (!options.sharedRoot) await rm(root, { recursive: true, force: true })
     },
   }
 }

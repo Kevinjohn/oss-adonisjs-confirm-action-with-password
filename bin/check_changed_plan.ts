@@ -97,6 +97,7 @@ export function planChangedChecks(
           '--check',
           '--ignore-unknown',
           '--no-error-on-unmatched-pattern',
+          '--',
           ...formattable,
         ]),
     // The repository's own lint script carries the zero-warning limit for every caller.
