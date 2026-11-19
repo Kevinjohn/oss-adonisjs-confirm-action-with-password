@@ -1,4 +1,6 @@
-import { readFile } from 'node:fs/promises'
+import { spawnSync } from 'node:child_process'
+import { tmpdir } from 'node:os'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from '@japa/runner'
@@ -83,6 +85,27 @@ test('formats only existing files and leaves the lockfile to pnpm', ({ assert })
   assert.deepEqual(commands.format.slice(-1), ['README.md'])
   assert.include(commands.format, '--ignore-unknown')
   assert.include(commands.format, '--no-error-on-unmatched-pattern')
+})
+
+test('Prettier checks a leading-dash filename as a literal path', async ({ assert, cleanup }) => {
+  const root = await mkdtemp(join(tmpdir(), 'confirm-format-'))
+  cleanup(() => rm(root, { recursive: true, force: true }))
+  const file = '--sample.ts'
+  const command = ran(planChangedChecks(changed(file))).format
+  const run = () =>
+    spawnSync(
+      process.execPath,
+      [join(repoRoot, 'node_modules/prettier/bin/prettier.cjs'), ...command.slice(3)],
+      { cwd: root, encoding: 'utf8' }
+    )
+  await writeFile(join(root, file), 'const value=  1')
+  const failure = run()
+  assert.equal(failure.status, 1, failure.stderr)
+  assert.include(failure.stderr, file)
+  await writeFile(join(root, file), 'const value = 1;\n')
+  const success = run()
+  assert.equal(success.status, 0, success.stderr)
+  assert.deepEqual(command.slice(-2), ['--', file])
 })
 
 test('formatter configuration checks the whole tree', ({ assert }) => {
