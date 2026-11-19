@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## 0.2.1 - 2026-11-19
+
+- Accept Account Kit credential objects with a getter-backed revision. Confirmation revocation
+  still follows Account Kit's sign-in and credential changes.
+- Require Account Kit 0.4.1 and verify that separate application instances share throttling state
+  when configured to use the same limiter store.
+- Document the confirmations table migration from 0.1.1. The 0.2.1 patch adds no new schema change.
+- Check literal formatter filenames, clean up timed-out check processes, and require a valid archive
+  digest before publishing.
+
 ## 0.2.0 - 2026-11-17
 
 - The README covers resource authorization in the transfer example, the low-level `consume` call,
