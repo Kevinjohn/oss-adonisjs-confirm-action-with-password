@@ -51,7 +51,7 @@ test('the documented upgrade adds expiry after the 0.1.1 create migration ran', 
     const password = 'Upgrade-test-password-7'
     await fixture.createUser(email, password)
     const input = await fixture.login(email, password)
-    const confirmations = fixture.confirmations()
+    const confirmations = fixture.makePasswordConfirmations()
     const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
     const { confirmationId, expiresAt } = await confirmations.confirmPassword(input, {
       ...request,

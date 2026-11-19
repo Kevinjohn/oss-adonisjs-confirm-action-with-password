@@ -10,7 +10,7 @@
 import { test } from '@japa/runner'
 import type { CurrentAccountInput } from '@kevinjohn/adonisjs-account-kit/types'
 import type { Fixture } from './helpers.js'
-import { bootFixture, codeOf, fakeSessionGuard } from './helpers.js'
+import { bootFixture, readCallOutcome, makeSessionGuard } from './helpers.js'
 
 const PW = 'pw-one-Original-7'
 const PW2 = 'Correct-Horse-9-battery'
@@ -57,7 +57,7 @@ const paths: Record<string, (account: Account) => Promise<CurrentAccountInput[]>
     return [input]
   },
   'logout': async ({ input }) => {
-    await fixture.kit.authentication.logout(fakeSessionGuard(), undefined, input)
+    await fixture.kit.authentication.logout(makeSessionGuard(), undefined, input)
     return [input]
   },
   'sessions.revoke of this sign-in from another device': async ({ input, other }) => {
@@ -107,13 +107,14 @@ const paths: Record<string, (account: Account) => Promise<CurrentAccountInput[]>
     return [input]
   },
   'signing in again in the same browser': async ({ email, input }) => {
-    const guard = { ...fakeSessionGuard(), previousHandle: () => input.sessionHandle }
+    const readPreviousSessionHandle = () => input.sessionHandle
+    const guard = { ...makeSessionGuard(), previousHandle: readPreviousSessionHandle }
     await fixture.kit.authentication.login({ email, password: PW, clientKey: 'test-client' }, guard)
     return [input]
   },
 }
 
-async function account(): Promise<Account> {
+async function readFixtureAccount(): Promise<Account> {
   const email = `revoked-${++users}@x.test`
   await fixture.createUser(email, PW)
   return { email, input: await fixture.login(email, PW), other: await fixture.login(email, PW) }
@@ -128,8 +129,8 @@ test.group('Revocation: every Account Kit path kills outstanding confirmations',
 
   for (const [name, revoke] of Object.entries(paths)) {
     test(`${name}: an outstanding confirmation is dead afterwards`, async ({ assert }) => {
-      const confirmations = fixture.confirmations()
-      const acc = await account()
+      const confirmations = fixture.makePasswordConfirmations()
+      const acc = await readFixtureAccount()
       const { confirmationId } = await confirmations.confirmPassword(acc.input, {
         ...request,
         password: PW,
@@ -143,7 +144,7 @@ test.group('Revocation: every Account Kit path kills outstanding confirmations',
             await trx.table('effects').insert({ label: `${name}: must not happen` })
           }
         )
-        assert.include(DEAD, await codeOf(spent))
+        assert.include(DEAD, await readCallOutcome(spent))
       }
       const effects = await fixture.db.from('effects').where('label', `${name}: must not happen`)
       assert.lengthOf(effects, 0)
@@ -153,8 +154,8 @@ test.group('Revocation: every Account Kit path kills outstanding confirmations',
       assert,
       cleanup,
     }) => {
-      const confirmations = fixture.confirmations()
-      const acc = await account()
+      const confirmations = fixture.makePasswordConfirmations()
+      const acc = await readFixtureAccount()
       const { confirmationId } = await confirmations.confirmPassword(acc.input, {
         ...request,
         password: PW,
@@ -213,7 +214,7 @@ test.group('Revocation: every Account Kit path kills outstanding confirmations',
       for (const input of afterwards) {
         assert.include(
           DEAD,
-          await codeOf(
+          await readCallOutcome(
             confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {})
           )
         )

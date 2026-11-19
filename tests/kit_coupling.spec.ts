@@ -9,7 +9,7 @@
 
 import { readFile } from 'node:fs/promises'
 import { test } from '@japa/runner'
-import { liveCredentialRevision } from '../src/credential_revision.js'
+import { readCredentialRevision } from '../src/credential_revision.js'
 import type { Fixture } from './helpers.js'
 import { bootFixture } from './helpers.js'
 
@@ -83,7 +83,7 @@ test.group('Account Kit coupling canary', (group) => {
     const input = await fixture.login(email, 'pw-one-Original-7')
     const read = () =>
       fixture.kit.authentication.withCurrent(current, ({ trx, account }) =>
-        liveCredentialRevision(trx, 'users', account.id)
+        readCredentialRevision(trx, 'users', account.id)
       )
     let current = input
     assert.isNull(await read(), 'KIT COUPLING: a fresh account must have no credential revision')

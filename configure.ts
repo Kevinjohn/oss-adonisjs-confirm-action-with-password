@@ -45,15 +45,15 @@ export async function configure(command: Configure) {
   const codemods = await command.createCodemods()
   codemods.overwriteExisting = false
   // Existing files are never rewritten, so a rerun with other flags must say what it left alone.
-  const keeps = async (path: string, expected: string[]) => {
+  const warnIfExistingConfigDiffers = async (path: string, expectedSnippets: string[]) => {
     const source = await readFile(path, 'utf8').catch(() => null)
-    if (source !== null && !expected.every((text) => source.includes(text))) {
+    if (source !== null && !expectedSnippets.every((text) => source.includes(text))) {
       command.logger.warning(
         `password_confirmations: ${path} already exists and does not match --table ${tableName} / --users-table ${usersTable} / --user-id-type ${userIdType}; it was left unchanged`
       )
     }
   }
-  await keeps(command.app.configPath('password_confirmations.ts'), [
+  await warnIfExistingConfigDiffers(command.app.configPath('password_confirmations.ts'), [
     `table: '${tableName}'`,
     `usersTable: '${usersTable}'`,
   ])
@@ -63,30 +63,31 @@ export async function configure(command: Configure) {
   })
 
   const suffix = '_create_password_confirmations_table.ts'
-  let existing: string[] = []
+  let migrationFileNames: string[] = []
   try {
-    existing = await readdir(command.app.makePath('database/migrations'))
+    migrationFileNames = await readdir(command.app.makePath('database/migrations'))
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
   }
   // The confirmations table references Account Kit's account_sessions, so its migration must run after the
   // Kit's (PostgreSQL rejects a foreign key to a table that does not exist yet).
-  if (!existing.some((file) => file.endsWith('_account_kit_create_account_sessions.ts'))) {
+  if (
+    !migrationFileNames.some((file) => file.endsWith('_account_kit_create_account_sessions.ts'))
+  ) {
     command.logger.warning(
       'password_confirmations: run node ace configure @kevinjohn/adonisjs-account-kit first; the confirmations migration must sort after its account_sessions migration'
     )
   }
-  const kept = existing.find((file) => file.endsWith(suffix))
-  if (kept) {
-    await keeps(command.app.makePath('database/migrations', kept), [
-      `tableName = '${tableName}'`,
-      `inTable('${usersTable}')`,
-      userIdColumns[userIdType],
-    ])
+  const existingConfirmationMigration = migrationFileNames.find((file) => file.endsWith(suffix))
+  if (existingConfirmationMigration) {
+    await warnIfExistingConfigDiffers(
+      command.app.makePath('database/migrations', existingConfirmationMigration),
+      [`tableName = '${tableName}'`, `inTable('${usersTable}')`, userIdColumns[userIdType]]
+    )
     command.logger.info(`Skipped database/migrations/*${suffix}`)
   } else {
     // Sort after every existing migration even when one carries a timestamp ahead of this clock.
-    const newest = Math.max(...existing.map((file) => Number.parseInt(file, 10) || 0))
+    const newest = Math.max(...migrationFileNames.map((file) => Number.parseInt(file, 10) || 0))
     const prefix = Math.max(Date.now(), newest + 1)
     await codemods.makeUsingStub(stubsRoot, 'migrations/create_password_confirmations_table.stub', {
       migration: {

@@ -4,9 +4,9 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from '@japa/runner'
-import { collectExit, outputOf, waitForPid } from '../helpers/child_process.js'
+import { collectExit, captureChildOutput, waitForPid } from '../helpers/child_process.js'
 
-async function directory(cleanup: (fn: () => void | Promise<void>) => void): Promise<string> {
+async function directory(cleanup: (callback: () => void | Promise<void>) => void): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'confirm-action-wait-for-pid-'))
   cleanup(() => rm(dir, { recursive: true, force: true }))
   return dir
@@ -46,7 +46,7 @@ const poll = setInterval(() => {
     ],
     { stdio: ['ignore', 'pipe', 'pipe'] }
   )
-  const result = await collectExit(child, await outputOf(child))
+  const result = await collectExit(child, await captureChildOutput(child))
   assert.equal(result.code, 0)
   assert.equal(result.text, 'late output')
 })

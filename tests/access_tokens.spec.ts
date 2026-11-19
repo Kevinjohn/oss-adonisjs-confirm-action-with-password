@@ -23,7 +23,7 @@ test('the real Kit with access tokens gives no sign-in row, so confirmations ref
     const input = { userId, tokenId: typeof tokenId === 'object' ? tokenId.id : tokenId }
     // The Kit accepts the token: this is a valid signed-in caller.
     await fixture.kit.authentication.current(input)
-    const confirmations = fixture.confirmations()
+    const confirmations = fixture.makePasswordConfirmations()
     const request = { action: 'a', scope: 's', intent: {} }
     for (const attempt of [
       confirmations.confirmPassword(input, { ...request, password: 'pw-one-Original-7' }),

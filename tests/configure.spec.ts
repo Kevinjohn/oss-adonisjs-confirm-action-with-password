@@ -10,20 +10,20 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { test } from '@japa/runner'
-import { configuredAppRoot } from './helpers.js'
+import { prepareConfiguredAppRoot } from './helpers.js'
 
 test.group('configure', () => {
   test('publishes config, one migration and one provider, and is idempotent', async ({
     assert,
   }) => {
-    const { root, ignitor } = await configuredAppRoot()
+    const { root, ignitor } = await prepareConfiguredAppRoot()
     try {
-      const migrations = async () => {
+      const listMigrationNames = async () => {
         const files = await readdir(join(root, 'database/migrations'))
         return files.filter((file) => file.endsWith('_create_password_confirmations_table.ts'))
       }
-      assert.lengthOf(await migrations(), 1)
-      const [migrationFile] = await migrations()
+      assert.lengthOf(await listMigrationNames(), 1)
+      const [migrationFile] = await listMigrationNames()
       const migration = await readFile(join(root, 'database/migrations', migrationFile), 'utf8')
       assert.include(
         migration,
@@ -44,7 +44,7 @@ test.group('configure', () => {
       )
 
       await ignitor.ace().handle(['configure', '@kevinjohn/adonisjs-confirm-action-with-password'])
-      assert.lengthOf(await migrations(), 1)
+      assert.lengthOf(await listMigrationNames(), 1)
       assert.equal(await readFile(join(root, 'adonisrc.ts'), 'utf8'), rc)
     } finally {
       await rm(root, { recursive: true, force: true })
@@ -54,7 +54,7 @@ test.group('configure', () => {
   test('--table and --users-table name the migration tables and the config together', async ({
     assert,
   }) => {
-    const { root, ignitor } = await configuredAppRoot()
+    const { root, ignitor } = await prepareConfiguredAppRoot()
     try {
       await rm(join(root, 'database/migrations'), { recursive: true })
       await rm(join(root, 'config/password_confirmations.ts'))
@@ -81,7 +81,7 @@ test.group('configure', () => {
   test('warns when the Account Kit sessions migration is not there to sort after', async ({
     assert,
   }) => {
-    const { root, ignitor } = await configuredAppRoot()
+    const { root, ignitor } = await prepareConfiguredAppRoot()
     const written: string[] = []
     const write = process.stdout.write.bind(process.stdout)
     try {
@@ -101,7 +101,7 @@ test.group('configure', () => {
   test('a rerun with other flags warns about the files it leaves alone and changes nothing', async ({
     assert,
   }) => {
-    const { root, ignitor } = await configuredAppRoot()
+    const { root, ignitor } = await prepareConfiguredAppRoot()
     const written: string[] = []
     const write = process.stdout.write.bind(process.stdout)
     const capture = async (flags: string[]) => {
@@ -154,7 +154,7 @@ test.group('configure', () => {
   test('the migration sorts after an Account Kit migration dated ahead of the clock', async ({
     assert,
   }) => {
-    const { root, ignitor } = await configuredAppRoot()
+    const { root, ignitor } = await prepareConfiguredAppRoot()
     try {
       const migrations = join(root, 'database/migrations')
       await rm(migrations, { recursive: true })
@@ -172,7 +172,7 @@ test.group('configure', () => {
   }).timeout(30_000)
 
   test('honours --user-id-type and refuses bad flags', async ({ assert }) => {
-    const { root, ignitor } = await configuredAppRoot()
+    const { root, ignitor } = await prepareConfiguredAppRoot()
     try {
       await rm(join(root, 'database/migrations'), { recursive: true })
       const ace = ignitor.ace()

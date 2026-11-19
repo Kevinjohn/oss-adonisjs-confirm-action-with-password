@@ -29,7 +29,7 @@ const packageRoot = new URL('../', import.meta.url)
 const self = '@kevinjohn/adonisjs-confirm-action-with-password'
 
 /** Resolves this package's own specifiers to source, everything else normally. */
-const importer = (specifier: string) => {
+const importFixtureModule = (specifier: string) => {
   if (specifier === self) return import(new URL('index.ts', packageRoot).href)
   if (specifier.startsWith(`${self}/`)) {
     const path = specifier.slice(self.length + 1)
@@ -64,7 +64,7 @@ export default class extends BaseSchema {
 `
 
 /** A fresh AdonisJS app root with a users migration, then both packages' `node ace configure`. */
-export async function configuredAppRoot(hostProfile = false) {
+export async function prepareConfiguredAppRoot(hostProfile = false) {
   const root = await mkdtemp(join(tmpdir(), 'adonisjs-confirm-action-with-password-'))
   await writeFile(
     join(root, 'package.json'),
@@ -95,7 +95,7 @@ export async function configuredAppRoot(hostProfile = false) {
     .merge({
       rcFileContents: { providers: [], commands: [async () => new ListLoader([Configure])] },
     })
-    .create(pathToFileURL(`${root}/`), { importer })
+    .create(pathToFileURL(`${root}/`), { importer: importFixtureModule })
   const idFlags = hostProfile ? ['--user-id-type=string'] : []
   await ignitor.ace().handle(['configure', '@kevinjohn/adonisjs-account-kit', ...idFlags])
   await ignitor.ace().handle(['configure', self, ...idFlags])
@@ -129,18 +129,18 @@ export default class extends BaseSchema {
       )
     )
   }
-  return { root, ignitor, importer }
+  return { root, ignitor, importFixtureModule }
 }
 
 /** The error code a call rejects with, or 'resolved'. */
-export const codeOf = (promise: Promise<unknown>) =>
+export const readCallOutcome = (promise: Promise<unknown>) =>
   promise.then(
     () => 'resolved',
     (error) => (error.code as string) ?? String(error)
   )
 
 /** A guard port standing in for the session guard: `establish` returns what a cookie session holds. */
-export function fakeSessionGuard() {
+export function makeSessionGuard() {
   return {
     strategy: 'session' as const,
     name: 'web',
@@ -159,7 +159,7 @@ export interface Fixture {
   kit: AccountKit
   root: string
   /** Builds a `PasswordConfirmations` on the booted app with a movable clock. */
-  confirmations(config?: PasswordConfirmationsConfig): PasswordConfirmations
+  makePasswordConfirmations(config?: PasswordConfirmationsConfig): PasswordConfirmations
   clock: { now: number }
   /** Account Kit notifications captured in place of mail: read tokens with `tokenFor`. */
   mail: ReturnType<typeof captureNotifications>
@@ -183,7 +183,7 @@ export async function bootFixture(
   const tokens = options.strategy === 'access_tokens'
   const { root } = options.sharedRoot
     ? { root: options.sharedRoot }
-    : await configuredAppRoot(options.hostProfile)
+    : await prepareConfiguredAppRoot(options.hostProfile)
   await options.prepareMigrations?.(root)
   const mail = captureNotifications()
   const ignitor = new IgnitorFactory()
@@ -195,7 +195,7 @@ export async function bootFixture(
           () => import('@adonisjs/lucid/database_provider'),
           () => import('@adonisjs/limiter/limiter_provider'),
           () => import('@kevinjohn/adonisjs-account-kit/account_kit_provider'),
-          () => importer(`${self}/password_confirmations_provider`),
+          () => importFixtureModule(`${self}/password_confirmations_provider`),
         ],
       },
       config: {
@@ -261,7 +261,7 @@ export async function bootFixture(
         password_confirmations: defineConfig(),
       },
     })
-    .create(pathToFileURL(`${root}/`), { importer })
+    .create(pathToFileURL(`${root}/`), { importer: importFixtureModule })
   const app = ignitor.createApp('test')
   await app.init()
   await app.boot()
@@ -282,7 +282,7 @@ export async function bootFixture(
     root,
     clock,
     mail,
-    confirmations: (config = {}) =>
+    makePasswordConfirmations: (config = {}) =>
       new PasswordConfirmations({
         kit,
         db,
@@ -308,7 +308,7 @@ export async function bootFixture(
     async login(email, password) {
       const { credential } = await kit.authentication.login(
         { email, password, clientKey: 'test-client' },
-        fakeSessionGuard()
+        makeSessionGuard()
       )
       return credential
     },

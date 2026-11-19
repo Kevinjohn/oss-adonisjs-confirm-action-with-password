@@ -1,7 +1,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import {
-  executedTests,
+  countExecutedTests,
   planChangedChecks,
   type ChangedCheckStep,
   type ChangedFile,
@@ -18,7 +18,7 @@ let interruptionCleanup: Promise<void> | undefined
 const signalErrors: unknown[] = []
 let abandonActive: ((error: unknown) => void) | undefined
 /** A timed-out step whose process group could not be shown gone: later steps must not start. */
-let ownershipUnresolved = false
+let isProcessOwnershipResolved = true
 
 function describeError(error: unknown): string {
   if (error instanceof AggregateError) {
@@ -27,7 +27,7 @@ function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function groupExists(groupId: number): boolean {
+function hasProcessGroup(groupId: number): boolean {
   try {
     process.kill(-groupId, 0)
     return true
@@ -60,7 +60,7 @@ function waitForOwnedProcessExit(child: ChildProcess, timeoutMs: number): Promis
       try {
         const exists =
           process.platform !== 'win32' && child.pid
-            ? groupExists(child.pid)
+            ? hasProcessGroup(child.pid)
             : child.exitCode === null && child.signalCode === null
         if (!exists) {
           clearInterval(poll)
@@ -131,32 +131,33 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => interrupt(signal))
 }
 
-function misuse(message: string): never {
+function exitForInvalidInvocation(message: string): never {
   console.error(`[check:changed] ${message}`)
   process.exit(2)
 }
 
-function git(args: string[]): string {
-  const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' })
-  if (result.status !== 0) misuse(`git ${args.join(' ')} failed: ${result.stderr.trim()}`)
+function runGit(commandArguments: string[]): string {
+  const result = spawnSync('git', commandArguments, { cwd: root, encoding: 'utf8' })
+  if (result.status !== 0)
+    exitForInvalidInvocation(`git ${commandArguments.join(' ')} failed: ${result.stderr.trim()}`)
   return result.stdout
 }
 
-function changedFiles(base: string): ChangedFile[] {
-  const mergeBase = git(['merge-base', base, 'HEAD']).trim()
-  const tracked = git(['diff', '--name-status', '--no-renames', '-z', mergeBase]).split('\0')
+function listChangedFiles(base: string): ChangedFile[] {
+  const mergeBase = runGit(['merge-base', base, 'HEAD']).trim()
+  const tracked = runGit(['diff', '--name-status', '--no-renames', '-z', mergeBase]).split('\0')
   const changes: ChangedFile[] = []
   for (let index = 0; index + 1 < tracked.length; index += 2) {
     changes.push({ path: tracked[index + 1], deleted: tracked[index] === 'D' })
   }
-  for (const path of git(['ls-files', '--others', '--exclude-standard', '-z']).split('\0')) {
+  for (const path of runGit(['ls-files', '--others', '--exclude-standard', '-z']).split('\0')) {
     if (path) changes.push({ path, deleted: false })
   }
   return changes
 }
 
 /** Run one step in its own process group so an interrupt can stop descendants too. */
-function run(
+function runCheckStep(
   step: ChangedCheckStep
 ): Promise<{ status: number | null; output: string; cleanupError?: unknown }> {
   return new Promise((resolve) => {
@@ -185,12 +186,12 @@ function run(
           if (settled) return
           // The group is gone, but an escaped descendant can still hold the pipes open.
           closeWait = setTimeout(() => {
-            ownershipUnresolved = true
+            isProcessOwnershipResolved = false
             abandon(new Error('No close event after the deadline kill.'))
           }, reapGraceMs)
         },
         (error) => {
-          ownershipUnresolved = true
+          isProcessOwnershipResolved = false
           abandon(error)
         }
       )
@@ -204,10 +205,10 @@ function run(
       child.stdout.destroy()
       child.stderr.destroy()
       child.unref()
-      void finish(null, null, error)
+      void finishCheckStep(null, null, error)
     }
     abandonActive = abandon
-    const finish = async (
+    const finishCheckStep = async (
       status: number | null,
       signal: NodeJS.Signals | null,
       terminalError?: unknown
@@ -239,34 +240,34 @@ function run(
       }
       resolve({ status: timeoutCleanup || signal ? null : status, output, cleanupError })
     }
-    child.once('close', (status, signal) => void finish(status, signal))
+    child.once('close', (status, signal) => void finishCheckStep(status, signal))
   })
 }
 
 const flags = process.argv.slice(2).filter((arg) => arg.startsWith('-'))
-const args = process.argv.slice(2).filter((arg) => !arg.startsWith('-'))
-if (args.length > 1 || flags.some((flag) => flag !== '--static'))
-  misuse('Use pnpm check:changed [--static] [base]')
+const commandArguments = process.argv.slice(2).filter((arg) => !arg.startsWith('-'))
+if (commandArguments.length > 1 || flags.some((flag) => flag !== '--static'))
+  exitForInvalidInvocation('Use pnpm check:changed [--static] [base]')
 if (Number(process.versions.node.split('.')[0]) !== 24) {
-  misuse(`Use Node 24 (found ${process.version}); run nvm use`)
+  exitForInvalidInvocation(`Use Node 24 (found ${process.version}); run nvm use`)
 }
-const base = args[0] ?? 'origin/main'
+const base = commandArguments[0] ?? 'origin/main'
 if (
   spawnSync('git', ['rev-parse', '--verify', '--quiet', `${base}^{commit}`], { cwd: root }).status
 )
-  misuse(`Unknown base ref ${base}`)
+  exitForInvalidInvocation(`Unknown base ref ${base}`)
 
-const changes = changedFiles(base)
+const changes = listChangedFiles(base)
 console.log(`[check:changed] ${changes.length} changed files since the merge-base with ${base}`)
-let failed = false
+let hasFailedCheck = false
 for (const step of planChangedChecks(changes, { static: flags.includes('--static') })) {
-  if (interruptedBy || ownershipUnresolved) break
+  if (interruptedBy || !isProcessOwnershipResolved) break
   if ('skip' in step) {
     console.log(`skip ${step.label} (${step.skip})`)
     continue
   }
-  const { status, output } = await run(step)
-  const tests = step.countsTests ? executedTests(output) : undefined
+  const { status, output } = await runCheckStep(step)
+  const tests = step.countsTests ? countExecutedTests(output) : undefined
   const problem =
     status !== 0
       ? `exit ${status ?? 'killed'}`
@@ -276,7 +277,7 @@ for (const step of planChangedChecks(changes, { static: flags.includes('--static
           ? 'no tests executed'
           : undefined
   if (problem) {
-    failed = true
+    hasFailedCheck = true
     console.log(`fail ${step.label} (${problem}): ${step.command.join(' ')}`)
     console.log(output.trimEnd().split('\n').slice(-40).join('\n'))
   } else {
@@ -284,16 +285,16 @@ for (const step of planChangedChecks(changes, { static: flags.includes('--static
   }
 }
 for (const error of signalErrors) {
-  failed = true
+  hasFailedCheck = true
   console.error(`[check:changed] signal escalation failed: ${describeError(error)}`)
 }
 if (interruptedBy && interruptionCleanup) {
   try {
     await interruptionCleanup
   } catch (error) {
-    failed = true
+    hasFailedCheck = true
     console.error(`[check:changed] cleanup failed: ${describeError(error)}`)
   }
 }
 process.exitCode =
-  interruptedBy === 'SIGINT' ? 130 : interruptedBy === 'SIGTERM' ? 143 : failed ? 1 : 0
+  interruptedBy === 'SIGINT' ? 130 : interruptedBy === 'SIGTERM' ? 143 : hasFailedCheck ? 1 : 0

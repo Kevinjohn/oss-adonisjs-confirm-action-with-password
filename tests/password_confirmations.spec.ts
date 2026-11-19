@@ -10,7 +10,7 @@
 import { randomUUID } from 'node:crypto'
 import { test } from '@japa/runner'
 import type { Fixture } from './helpers.js'
-import { bootFixture, codeOf, fakeSessionGuard } from './helpers.js'
+import { bootFixture, readCallOutcome, makeSessionGuard } from './helpers.js'
 import type { ConfirmationRequest } from '../src/types.js'
 import { PasswordConfirmations } from '../src/password_confirmations.js'
 import { defineConfig } from '../src/define_config.js'
@@ -25,7 +25,7 @@ const request: ConfirmationRequest = {
 
 let fixture: Fixture
 let users = 0
-async function signedIn() {
+async function signInTestUser() {
   const email = `user-${++users}@x.test`
   await fixture.createUser(email, PW)
   return { email, input: await fixture.login(email, PW) }
@@ -44,8 +44,8 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('issues after the password check and spends exactly once, with the product write', async ({
     assert,
   }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     const { confirmationId, expiresAt } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
@@ -65,7 +65,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     const user = await fixture.db.from('users').where('id', input.userId).firstOrFail()
     assert.equal(user.email, 'spent@x.test')
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {})
       ),
       'E_PASSWORD_CONFIRMATION_REQUIRED'
@@ -73,8 +73,8 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('issues and spends using prototype getters for the credential', async ({ assert }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     class Credential {
       get userId() {
         return input.userId
@@ -103,10 +103,10 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('a wrong password issues nothing', async ({ assert }) => {
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     assert.equal(
-      await codeOf(
-        fixture.confirmations().confirmPassword(input, { ...request, password: 'nope' })
+      await readCallOutcome(
+        fixture.makePasswordConfirmations().confirmPassword(input, { ...request, password: 'nope' })
       ),
       'E_PASSWORD_CONFIRMATION_DENIED'
     )
@@ -117,8 +117,8 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('binds to action, scope and the exact intent', async ({ assert }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     const { confirmationId } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
@@ -129,7 +129,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       { ...request, intent: { toUserId: 'u3' } },
     ]) {
       assert.equal(
-        await codeOf(
+        await readCallOutcome(
           confirmations.withConfirmation(input, { ...changed, confirmationId }, async () => {})
         ),
         'E_PASSWORD_CONFIRMATION_REQUIRED'
@@ -143,8 +143,8 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('a throw after the spend rolls the spend back', async ({ assert }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     const { confirmationId } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
@@ -165,14 +165,14 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('two spends of one confirmation: exactly one wins (serialised by the Kit account lock)', async ({
     assert,
   }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     const { confirmationId } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
     })
     const spend = () =>
-      codeOf(
+      readCallOutcome(
         confirmations.withConfirmation(input, { ...request, confirmationId }, async ({ trx }) => {
           await trx.table('effects').insert({ label: 'spent-twice' })
         })
@@ -185,16 +185,16 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('a window changed after issue never moves the deadline later, and a shorter one applies at once', async ({
     assert,
   }) => {
-    const { input } = await signedIn()
-    const short = fixture.confirmations({ window: '2m' })
-    const long = fixture.confirmations({ window: '5m' })
+    const { input } = await signInTestUser()
+    const short = fixture.makePasswordConfirmations({ window: '2m' })
+    const long = fixture.makePasswordConfirmations({ window: '5m' })
     const fromShort = await short.confirmPassword(input, { ...request, password: PW })
     const fromLong = await long.confirmPassword(input, { ...request, password: PW })
     assert.equal(fromShort.expiresAt, fixture.clock.now + 2 * 60_000)
     fixture.clock.now += 2 * 60_000
     // Issued under 2 minutes, spent by a process configured for 5: the returned deadline holds.
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         long.withConfirmation(
           input,
           { ...request, confirmationId: fromShort.confirmationId },
@@ -205,7 +205,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     )
     // Issued under 5 minutes, spent by a process tightened to 2: the tighter window applies.
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         short.withConfirmation(
           input,
           { ...request, confirmationId: fromLong.confirmationId },
@@ -223,15 +223,15 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
 
   test('prune follows each stored deadline, not the pruning process window', async ({ assert }) => {
     await fixture.db.from('password_confirmations').delete()
-    const { email, input } = await signedIn()
+    const { email, input } = await signInTestUser()
     const expired = await fixture
-      .confirmations({ window: '2m' })
+      .makePasswordConfirmations({ window: '2m' })
       .confirmPassword(input, { ...request, password: PW })
     const live = await fixture
-      .confirmations({ window: '5m' })
+      .makePasswordConfirmations({ window: '5m' })
       .confirmPassword(await fixture.login(email, PW), { ...request, password: PW })
     fixture.clock.now += 2 * 60_000
-    assert.equal(await fixture.confirmations({ window: '10m' }).prune(), 1)
+    assert.equal(await fixture.makePasswordConfirmations({ window: '10m' }).prune(), 1)
     const rows = await fixture.db.from('password_confirmations').select('id')
     assert.deepEqual(
       rows.map((row) => row.id),
@@ -244,10 +244,10 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     assert,
   }) => {
     const hash = await fixture.app.container.make('hash')
-    const owner = await signedIn()
-    const other = await signedIn()
+    const owner = await signInTestUser()
+    const other = await signInTestUser()
     const input = { ...owner.input }
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       // A host that refreshes its credential object in place while the hash runs.
       verifyPassword: async (hashed, password) => {
         Object.assign(input, other.input)
@@ -266,15 +266,15 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('another sign-in of the same account cannot spend it', async ({ assert }) => {
-    const confirmations = fixture.confirmations()
-    const { email, input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { email, input } = await signInTestUser()
     const other = await fixture.login(email, PW)
     const { confirmationId } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
     })
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         confirmations.withConfirmation(other, { ...request, confirmationId }, async () => {})
       ),
       'E_PASSWORD_CONFIRMATION_REQUIRED'
@@ -282,8 +282,8 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('the window runs from verified_at and is checked at spend', async ({ assert }) => {
-    const confirmations = fixture.confirmations({ window: '2m' })
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations({ window: '2m' })
+    const { input } = await signInTestUser()
     const { confirmationId: early } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
@@ -295,7 +295,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     })
     fixture.clock.now += 1
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         confirmations.withConfirmation(input, { ...request, confirmationId: early }, async () => {})
       ),
       'E_PASSWORD_CONFIRMATION_REQUIRED'
@@ -309,24 +309,24 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
 
   test('a stall between the hash and issue past the window issues nothing', async ({ assert }) => {
     let calls = 0
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       authorize: async () => {
         // The second call runs in stage 2, after the hash.
         if (++calls === 2) fixture.clock.now += 5 * 60_000
         return true
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_STALE'
     )
   })
 
   test('a password change during the hash refuses stage 2', async ({ assert }) => {
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     const hash = await fixture.app.container.make('hash')
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       verifyPassword: async (hashed, password) => {
         const ok = await hash.verify(hashed, password)
         await fixture.kit.emailPasswordManagement.changePassword({
@@ -339,7 +339,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       },
     })
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_ACCOUNT_KIT_INVALID_SESSION'
     )
   })
@@ -347,8 +347,8 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('a password change that keeps the session kills earlier confirmations', async ({
     assert,
   }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     assert.isNull(input.revision)
     const { confirmationId } = await confirmations.confirmPassword(input, {
       ...request,
@@ -364,7 +364,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     // The kept session is valid; the caller passes nothing that could widen the old confirmation.
     await fixture.kit.authentication.current(kept)
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         confirmations.withConfirmation(kept, { ...request, confirmationId }, async () => {})
       ),
       'E_PASSWORD_CONFIRMATION_REQUIRED'
@@ -378,15 +378,15 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('logout ends the confirmation and deletes its row', async ({ assert }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     const { confirmationId } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
     })
-    await fixture.kit.authentication.logout(fakeSessionGuard(), undefined, input)
+    await fixture.kit.authentication.logout(makeSessionGuard(), undefined, input)
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {})
       ),
       'E_ACCOUNT_KIT_INVALID_SESSION'
@@ -397,24 +397,28 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('host policy runs at both issuance stages and at spend', async ({ assert }) => {
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     let allow = [true, false]
-    const stageTwo = fixture.confirmations({ authorize: async () => allow.shift() ?? false })
+    const stageTwo = fixture.makePasswordConfirmations({
+      authorize: async () => allow.shift() ?? false,
+    })
     assert.equal(
-      await codeOf(stageTwo.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(stageTwo.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_FORBIDDEN'
     )
     allow = [false]
     assert.equal(
-      await codeOf(stageTwo.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(stageTwo.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_FORBIDDEN'
     )
     const { confirmationId } = await fixture
-      .confirmations()
+      .makePasswordConfirmations()
       .confirmPassword(input, { ...request, password: PW })
-    const atSpend = fixture.confirmations({ authorize: async () => false })
+    const atSpend = fixture.makePasswordConfirmations({ authorize: async () => false })
     assert.equal(
-      await codeOf(atSpend.withConfirmation(input, { ...request, confirmationId }, async () => {})),
+      await readCallOutcome(
+        atSpend.withConfirmation(input, { ...request, confirmationId }, async () => {})
+      ),
       'E_PASSWORD_CONFIRMATION_FORBIDDEN'
     )
   })
@@ -422,8 +426,8 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('consume works inside a caller-owned withCurrent and refuses a missing confirmation id', async ({
     assert,
   }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     const { confirmationId } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
@@ -432,7 +436,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       confirmations.consume(context, { ...request, confirmationId })
     )
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         fixture.kit.authentication.withCurrent(input, (context) =>
           confirmations.consume(context, { ...request, confirmationId: '' })
         )
@@ -442,9 +446,9 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('prune removes spent and expired confirmations and keeps live ones', async ({ assert }) => {
-    const confirmations = fixture.confirmations()
+    const confirmations = fixture.makePasswordConfirmations()
     await fixture.db.from('password_confirmations').delete()
-    const { email, input } = await signedIn()
+    const { email, input } = await signInTestUser()
     await confirmations.confirmPassword(input, { ...request, password: PW })
     const spent = await confirmations.confirmPassword(input, { ...request, password: PW })
     await confirmations.withConfirmation(
@@ -465,9 +469,9 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('prune removes a spent confirmation that is still inside its window', async ({ assert }) => {
-    const confirmations = fixture.confirmations()
+    const confirmations = fixture.makePasswordConfirmations()
     await fixture.db.from('password_confirmations').delete()
-    const { email, input } = await signedIn()
+    const { email, input } = await signInTestUser()
     const spent = await confirmations.confirmPassword(input, { ...request, password: PW })
     await confirmations.withConfirmation(
       input,
@@ -489,8 +493,8 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('issuance clears spent and expired confirmations of the same sign-in', async ({
     assert,
   }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     const first = await confirmations.confirmPassword(input, { ...request, password: PW })
     await confirmations.withConfirmation(
       input,
@@ -514,8 +518,8 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('an unknown well-formed confirmation id fails exactly like a spent or mismatched one', async ({
     assert,
   }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     const { confirmationId } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
@@ -555,14 +559,14 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('the spend window runs from verified_at, not issued_at', async ({ assert }) => {
     const windowMs = 5 * 60_000
     let calls = 0
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       authorize: async () => {
         // Stall stage 2 (second call) for most of the window: issued_at = verified_at + window - 1 s.
         if (++calls === 2) fixture.clock.now += windowMs - 1_000
         return true
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     const verifiedAt = fixture.clock.now
     const { confirmationId, expiresAt } = await confirmations.confirmPassword(input, {
       ...request,
@@ -578,9 +582,9 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     fixture.clock.now += 2_000
     // 1 s after issue, but past verified_at + window.
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         fixture
-          .confirmations()
+          .makePasswordConfirmations()
           .withConfirmation(input, { ...request, confirmationId }, async () => {})
       ),
       'E_PASSWORD_CONFIRMATION_REQUIRED'
@@ -588,12 +592,12 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('the product callback never runs when the spend fails', async ({ assert }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     let ran = 0
     for (const confirmationId of [randomUUID(), '']) {
       assert.equal(
-        await codeOf(
+        await readCallOutcome(
           confirmations.withConfirmation(
             input,
             { ...request, confirmationId },
@@ -610,9 +614,9 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     assert,
   }) => {
     // Models sign-in id reuse across accounts: the account binding must hold on its own.
-    const confirmations = fixture.confirmations()
-    const owner = await signedIn()
-    const intruder = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const owner = await signInTestUser()
+    const intruder = await signInTestUser()
     const { confirmationId } = await confirmations.confirmPassword(owner.input, {
       ...request,
       password: PW,
@@ -626,7 +630,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       .where('id', confirmationId)
       .update({ sign_in_id: intruderSignIn, credential_revision: null })
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         confirmations.withConfirmation(
           intruder.input,
           { ...request, confirmationId },
@@ -639,13 +643,13 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
 
   test('host policy never sees the password', async ({ assert }) => {
     const seen: unknown[] = []
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       authorize: async (_context, policyRequest) => {
         seen.push(policyRequest)
         return true
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     const { confirmationId } = await confirmations.confirmPassword(input, {
       ...request,
       password: PW,
@@ -658,9 +662,9 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('an account with no stored password fails closed', async ({ assert }) => {
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     let hashed = 0
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       readPasswordHash: async () => null,
       verifyPassword: async () => {
         hashed++
@@ -668,7 +672,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       },
     })
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_DENIED'
     )
     // Fails closed before the hash, whatever the hash service would say.
@@ -678,7 +682,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('an account the Kit reports as passwordless fails closed despite a stored hash', async ({
     assert,
   }) => {
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     const hash = await fixture.app.container.make('hash')
     let hashed = 0
     // A custom users adapter may keep a legacy hash on a social-only account and report
@@ -700,15 +704,15 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
       },
     })
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_DENIED'
     )
     assert.equal(hashed, 0)
   })
 
   test('null revision: null matches null, null vs non-null does not', async ({ assert }) => {
-    const confirmations = fixture.confirmations()
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations()
+    const { input } = await signInTestUser()
     assert.isNull(input.revision, 'a fresh account has no credential revision')
     const nullBound = await confirmations.confirmPassword(input, { ...request, password: PW })
     const row = await fixture.db
@@ -733,7 +737,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
     assert.isNotNull(revision)
     // null at issue, non-null live: dead, even on the kept sign-in.
     assert.equal(
-      await codeOf(
+      await readCallOutcome(
         confirmations.withConfirmation(
           { ...input, revision },
           { ...request, confirmationId: stale.confirmationId },
@@ -745,14 +749,14 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('wrong passwords are throttled per account through the app limiter', async ({ assert }) => {
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 3, duration: '1 minute', blockDuration: '10 minutes' },
     })
-    const { email, input } = await signedIn()
+    const { email, input } = await signInTestUser()
     const other = await fixture.login(email, PW)
     for (const who of [input, other, input]) {
       assert.equal(
-        await codeOf(confirmations.confirmPassword(who, { ...request, password: 'nope' })),
+        await readCallOutcome(confirmations.confirmPassword(who, { ...request, password: 'nope' })),
         'E_PASSWORD_CONFIRMATION_DENIED'
       )
     }
@@ -769,12 +773,14 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('a correct password resets the failed-attempt budget', async ({ assert }) => {
-    const confirmations = fixture.confirmations({ throttle: { requests: 3 } })
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations({ throttle: { requests: 3 } })
+    const { input } = await signInTestUser()
     for (let round = 0; round < 2; round++) {
       for (let i = 0; i < 2; i++) {
         assert.equal(
-          await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
+          await readCallOutcome(
+            confirmations.confirmPassword(input, { ...request, password: 'nope' })
+          ),
           'E_PASSWORD_CONFIRMATION_DENIED'
         )
       }
@@ -783,11 +789,13 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   })
 
   test('throttle: false leaves throttling to the host', async ({ assert }) => {
-    const confirmations = fixture.confirmations({ throttle: false })
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations({ throttle: false })
+    const { input } = await signInTestUser()
     for (let i = 0; i < 7; i++) {
       assert.equal(
-        await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
+        await readCallOutcome(
+          confirmations.confirmPassword(input, { ...request, password: 'nope' })
+        ),
         'E_PASSWORD_CONFIRMATION_DENIED'
       )
     }
@@ -796,11 +804,11 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.4.0', (group) => {
   test('sign-in ids are not reused after the newest is deleted (SQLite AUTOINCREMENT)', async ({
     assert,
   }) => {
-    const { email } = await signedIn()
+    const { email } = await signInTestUser()
     const a = await fixture.login(email, PW)
     const [newest] = await fixture.db.from('account_sessions').max('id as id')
     const top = Number(newest.id)
-    await fixture.kit.authentication.logout(fakeSessionGuard(), undefined, a)
+    await fixture.kit.authentication.logout(makeSessionGuard(), undefined, a)
     const b = await fixture.login(email, PW)
     const id = await fixture.kit.authentication.withCurrent(b, async ({ signInId }) => signInId!)
     assert.isAbove(id, top)

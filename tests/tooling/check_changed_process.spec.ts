@@ -8,7 +8,7 @@ import { test } from '@japa/runner'
 import {
   collectExit,
   isAlive,
-  outputOf,
+  captureChildOutput,
   waitForFile,
   waitForPid,
 } from '../helpers/child_process.js'
@@ -34,10 +34,10 @@ type Fixture = {
   ready: string
   termSent: string
   base: string
-  env: NodeJS.ProcessEnv
+  environment: NodeJS.ProcessEnv
 }
 
-async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
+async function makeCheckProcessFixture(options: FixtureOptions = {}): Promise<Fixture> {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'confirm-action-check-changed-'))
   const root = path.join(directory, 'checkout')
   const bin = path.join(directory, 'bin')
@@ -53,7 +53,8 @@ async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
 
   const git = execFileSync('which', ['git'], { encoding: 'utf8' }).trim()
   await symlink(git, path.join(supportBin, 'git'))
-  const runGit = (args: string[]) => execFileSync(git, args, { cwd: root, stdio: 'ignore' })
+  const runGit = (commandArguments: string[]) =>
+    execFileSync(git, commandArguments, { cwd: root, stdio: 'ignore' })
   runGit(['init', '-q'])
   runGit(['config', 'user.email', 'fixture@example.test'])
   runGit(['config', 'user.name', 'Fixture'])
@@ -76,7 +77,7 @@ async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
     const commandPath = path.join(bin, 'pnpm')
     await writeFile(
       commandPath,
-      `#!${process.execPath}\nimport { spawn } from 'node:child_process'\nimport { readFile, writeFile } from 'node:fs/promises'\nconst args = process.argv.slice(2)\nawait writeFile(${JSON.stringify(log)}, (await readFile(${JSON.stringify(log)}, 'utf8')) + args.join(' ') + '\\n')\nif (process.env.CHECK_CHANGED_FLOOD && args[0] === 'exec') {\n  const line = 'x'.repeat(1023) + '\\n'\n  const block = line.repeat(1024)\n  for (let mib = 0; mib < Number(process.env.CHECK_CHANGED_FLOOD); mib++) {\n    if (!process.stdout.write(block)) await new Promise((resolve) => process.stdout.once('drain', resolve))\n  }\n}\nif (process.env.CHECK_CHANGED_HANG === '1') {\n  spawn(process.execPath, ['worker.js'], { cwd: process.cwd(), stdio: 'ignore' })\n  for (let attempt = 0; attempt < 250; attempt++) {\n    if (await readFile(${JSON.stringify(ready)}, 'utf8').catch(() => '')) break\n    await new Promise((resolve) => setTimeout(resolve, 20))\n  }\n  setInterval(() => {}, 1000)\n}\n`,
+      `#!${process.execPath}\nimport { spawn } from 'node:child_process'\nimport { readFile, writeFile } from 'node:fs/promises'\nconst commandArguments = process.argv.slice(2)\nawait writeFile(${JSON.stringify(log)}, (await readFile(${JSON.stringify(log)}, 'utf8')) + commandArguments.join(' ') + '\\n')\nif (process.env.CHECK_CHANGED_FLOOD && commandArguments[0] === 'exec') {\n  const line = 'x'.repeat(1023) + '\\n'\n  const block = line.repeat(1024)\n  for (let mib = 0; mib < Number(process.env.CHECK_CHANGED_FLOOD); mib++) {\n    if (!process.stdout.write(block)) await new Promise((resolve) => process.stdout.once('drain', resolve))\n  }\n}\nif (process.env.CHECK_CHANGED_HANG === '1') {\n  spawn(process.execPath, ['worker.js'], { cwd: process.cwd(), stdio: 'ignore' })\n  for (let attempt = 0; attempt < 250; attempt++) {\n    if (await readFile(${JSON.stringify(ready)}, 'utf8').catch(() => '')) break\n    await new Promise((resolve) => setTimeout(resolve, 20))\n  }\n  setInterval(() => {}, 1000)\n}\n`,
       { mode: 0o755 }
     )
   }
@@ -91,26 +92,39 @@ async function fixture(options: FixtureOptions = {}): Promise<Fixture> {
   }
 
   await chmod(directory, 0o755)
-  const env: NodeJS.ProcessEnv = {
+  const environment: NodeJS.ProcessEnv = {
     ...process.env,
     PATH: `${bin}${path.delimiter}${supportBin}`,
   }
-  delete env.CHECK_CHANGED_HANG
-  delete env.CHECK_CHANGED_FLOOD
-  if (options.command === 'hang') env.CHECK_CHANGED_HANG = '1'
+  delete environment.CHECK_CHANGED_HANG
+  delete environment.CHECK_CHANGED_FLOOD
+  if (options.command === 'hang') environment.CHECK_CHANGED_HANG = '1'
   if (options.hook) {
-    env.NODE_OPTIONS =
-      `${env.NODE_OPTIONS ?? ''} --require=${path.join(directory, 'process-hook.cjs')}`.trim()
+    environment.NODE_OPTIONS =
+      `${environment.NODE_OPTIONS ?? ''} --require=${path.join(directory, 'process-hook.cjs')}`.trim()
   }
-  return { directory, root, bin, log, ready, termSent, base, env }
+  return { directory, root, bin, log, ready, termSent, base, environment }
 }
 
 /** Start the runner in its own process group and own it, and anything it starts, from now on. */
-function launch(f: Fixture, cleanup: (fn: () => void | Promise<void>) => void): ChildProcess {
+function launch(
+  fixture: Fixture,
+  cleanup: (callback: () => void | Promise<void>) => void
+): ChildProcess {
   const child = spawn(
     process.execPath,
-    ['--import=@poppinss/ts-exec', path.join(f.root, 'bin/check_changed.ts'), '--static', f.base],
-    { cwd: f.root, env: f.env, stdio: ['ignore', 'pipe', 'pipe'], detached: true }
+    [
+      '--import=@poppinss/ts-exec',
+      path.join(fixture.root, 'bin/check_changed.ts'),
+      '--static',
+      fixture.base,
+    ],
+    {
+      cwd: fixture.root,
+      env: fixture.environment,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      detached: true,
+    }
   )
   cleanup(() => {
     try {
@@ -125,10 +139,10 @@ function launch(f: Fixture, cleanup: (fn: () => void | Promise<void>) => void): 
  * of its own, so killing the runner's group leaves the step's command and the worker running.
  */
 async function ownDescendant(
-  f: Fixture,
-  cleanup: (fn: () => void | Promise<void>) => void
+  fixture: Fixture,
+  cleanup: (callback: () => void | Promise<void>) => void
 ): Promise<number> {
-  const pid = await waitForPid(f.ready)
+  const pid = await waitForPid(fixture.ready)
   const group = Number(
     execFileSync('ps', ['-o', 'pgid=', '-p', String(pid)], { encoding: 'utf8' }).trim()
   )
@@ -146,10 +160,10 @@ async function ownDescendant(
 test('runs selected static checks normally and observes a missing command spawn error', async ({
   cleanup,
 }) => {
-  const normal = await fixture()
+  const normal = await makeCheckProcessFixture()
   cleanup(() => rm(normal.directory, { recursive: true, force: true }))
   const normalChild = launch(normal, cleanup)
-  const normalOutput = await outputOf(normalChild)
+  const normalOutput = await captureChildOutput(normalChild)
   const normalResult = await collectExit(normalChild, normalOutput)
   assert.equal(normalResult.code, 0, normalResult.text)
   assert.match(normalResult.text, /pass format/)
@@ -158,10 +172,10 @@ test('runs selected static checks normally and observes a missing command spawn 
   // Positive control: this is how the shim logs the steps the interrupt tests must not see.
   assert.match(normalLog, laterSteps)
 
-  const missing = await fixture({ command: 'missing' })
+  const missing = await makeCheckProcessFixture({ command: 'missing' })
   cleanup(() => rm(missing.directory, { recursive: true, force: true }))
   const missingChild = launch(missing, cleanup)
-  const missingOutput = await outputOf(missingChild)
+  const missingOutput = await captureChildOutput(missingChild)
   const missingResult = await collectExit(missingChild, missingOutput)
   assert.equal(missingResult.code, 1, missingResult.text)
   assert.match(missingResult.text, /spawn failed: spawn pnpm ENOENT/)
@@ -171,16 +185,16 @@ test('runs selected static checks normally and observes a missing command spawn 
 test('TERM-resistant descendants receive KILL, are reaped, and block later selected checks', async ({
   cleanup,
 }) => {
-  const f = await fixture({ command: 'hang' })
-  cleanup(() => rm(f.directory, { recursive: true, force: true }))
-  const child = launch(f, cleanup)
-  const output = await outputOf(child)
-  const descendantPid = await ownDescendant(f, cleanup)
+  const fixture = await makeCheckProcessFixture({ command: 'hang' })
+  cleanup(() => rm(fixture.directory, { recursive: true, force: true }))
+  const child = launch(fixture, cleanup)
+  const output = await captureChildOutput(child)
+  const descendantPid = await ownDescendant(fixture, cleanup)
   child.kill('SIGTERM')
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
   assert.match(result.text, /fail format \(exit killed\)/)
-  assert.doesNotMatch(await readFile(f.log, 'utf8'), laterSteps)
+  assert.doesNotMatch(await readFile(fixture.log, 'utf8'), laterSteps)
   assert.equal(await isAlive(descendantPid), false)
   assert.doesNotMatch(result.text, /UnhandledPromiseRejection|unhandledRejection/)
 }).timeout(20_000)
@@ -188,40 +202,40 @@ test('TERM-resistant descendants receive KILL, are reaped, and block later selec
 test('a second signal escalates immediately while the first signal determines the exit code', async ({
   cleanup,
 }) => {
-  const f = await fixture({ command: 'hang', hook: 'record-term' })
-  cleanup(() => rm(f.directory, { recursive: true, force: true }))
-  const child = launch(f, cleanup)
-  const output = await outputOf(child)
-  const descendantPid = await ownDescendant(f, cleanup)
+  const fixture = await makeCheckProcessFixture({ command: 'hang', hook: 'record-term' })
+  cleanup(() => rm(fixture.directory, { recursive: true, force: true }))
+  const child = launch(fixture, cleanup)
+  const output = await captureChildOutput(child)
+  const descendantPid = await ownDescendant(fixture, cleanup)
   child.kill('SIGTERM')
-  await waitForFile(f.termSent)
+  await waitForFile(fixture.termSent)
   child.kill('SIGINT')
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
   assert.equal(await isAlive(descendantPid), false)
-  assert.doesNotMatch(await readFile(f.log, 'utf8'), laterSteps)
+  assert.doesNotMatch(await readFile(fixture.log, 'utf8'), laterSteps)
 }).timeout(15_000)
 
 test('reports failed final reap and retains the first signal result', async ({ cleanup }) => {
-  const f = await fixture({ command: 'hang', hook: 'fail-reap' })
-  cleanup(() => rm(f.directory, { recursive: true, force: true }))
-  const child = launch(f, cleanup)
-  const output = await outputOf(child)
-  await ownDescendant(f, cleanup)
+  const fixture = await makeCheckProcessFixture({ command: 'hang', hook: 'fail-reap' })
+  cleanup(() => rm(fixture.directory, { recursive: true, force: true }))
+  const child = launch(fixture, cleanup)
+  const output = await captureChildOutput(child)
+  await ownDescendant(fixture, cleanup)
   child.kill('SIGTERM')
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
   assert.match(result.text, /cleanup failed:.*did not exit after SIGKILL/s)
-  assert.doesNotMatch(await readFile(f.log, 'utf8'), laterSteps)
+  assert.doesNotMatch(await readFile(fixture.log, 'utf8'), laterSteps)
   assert.doesNotMatch(result.text, /UnhandledPromiseRejection|unhandledRejection/)
 }).timeout(20_000)
 
 test('interrupt settles a never-closing owned child and releases its live local handles', async ({
   cleanup,
 }) => {
-  const f = await fixture()
-  cleanup(() => rm(f.directory, { recursive: true, force: true }))
-  const hook = path.join(f.directory, 'never-close.cjs')
+  const fixture = await makeCheckProcessFixture()
+  cleanup(() => rm(fixture.directory, { recursive: true, force: true }))
+  const hook = path.join(fixture.directory, 'never-close.cjs')
   await writeFile(
     hook,
     `
@@ -241,27 +255,27 @@ let clock = 0; Date.now = () => (clock += 6000)
 require('node:module').syncBuiltinESMExports()
 `
   )
-  f.env.NODE_OPTIONS = `${f.env.NODE_OPTIONS ?? ''} --require=${hook}`
-  const child = launch(f, cleanup)
-  const output = await outputOf(child)
+  fixture.environment.NODE_OPTIONS = `${fixture.environment.NODE_OPTIONS ?? ''} --require=${hook}`
+  const child = launch(fixture, cleanup)
+  const output = await captureChildOutput(child)
   const result = await collectExit(child, output)
   assert.equal(result.code, 143, result.text)
   assert.match(result.text, /did not exit after SIGKILL/)
   assert.match(result.text, /partial output/)
   assert.match(result.text, /LOCAL_HANDLE_RELEASED/)
-  assert.equal(await readFile(f.log, 'utf8'), '')
+  assert.equal(await readFile(fixture.log, 'utf8'), '')
 }).timeout(10_000)
 
 test('keeps a bounded tail of a step that prints far more than the heap allows', async ({
   cleanup,
 }) => {
-  const f = await fixture()
-  cleanup(() => rm(f.directory, { recursive: true, force: true }))
+  const fixture = await makeCheckProcessFixture()
+  cleanup(() => rm(fixture.directory, { recursive: true, force: true }))
   // 256 MiB of output against a 64 MiB heap: an unbounded buffer runs out of memory.
-  f.env.CHECK_CHANGED_FLOOD = '256'
-  f.env.NODE_OPTIONS = `${f.env.NODE_OPTIONS ?? ''} --max-old-space-size=64`
-  const child = launch(f, cleanup)
-  const output = await outputOf(child)
+  fixture.environment.CHECK_CHANGED_FLOOD = '256'
+  fixture.environment.NODE_OPTIONS = `${fixture.environment.NODE_OPTIONS ?? ''} --max-old-space-size=64`
+  const child = launch(fixture, cleanup)
+  const output = await captureChildOutput(child)
   const result = await collectExit(child, output)
   assert.equal(result.code, 0, result.text.slice(-2000))
   assert.match(result.text, /pass format/)
@@ -270,9 +284,9 @@ test('keeps a bounded tail of a step that prints far more than the heap allows',
 test('a step past its deadline whose group cannot be killed is abandoned and stops later checks', async ({
   cleanup,
 }) => {
-  const f = await fixture()
-  cleanup(() => rm(f.directory, { recursive: true, force: true }))
-  const hook = path.join(f.directory, 'never-close.cjs')
+  const fixture = await makeCheckProcessFixture()
+  cleanup(() => rm(fixture.directory, { recursive: true, force: true }))
+  const hook = path.join(fixture.directory, 'never-close.cjs')
   await writeFile(
     hook,
     `
@@ -280,8 +294,8 @@ const cp = require('node:child_process')
 const fs = require('node:fs')
 const { EventEmitter } = require('node:events')
 const { PassThrough } = require('node:stream')
-cp.spawn = (command, args) => {
- fs.appendFileSync(${JSON.stringify(f.log)}, args.join(' ') + '\\n')
+cp.spawn = (command, commandArguments) => {
+ fs.appendFileSync(${JSON.stringify(fixture.log)}, commandArguments.join(' ') + '\\n')
  const child = new EventEmitter(); child.pid = 99999999; child.exitCode = child.signalCode = null
  child.stdout = new PassThrough(); child.stderr = new PassThrough()
  const liveHandle = setInterval(() => {}, 1000)
@@ -293,16 +307,16 @@ let clock = 0; Date.now = () => (clock += 6000)
 require('node:module').syncBuiltinESMExports()
 `
   )
-  f.env.NODE_OPTIONS = `${f.env.NODE_OPTIONS ?? ''} --require=${hook}`
-  f.env.CHECK_CHANGED_STEP_LIMIT_MS = '50'
-  const child = launch(f, cleanup)
-  const output = await outputOf(child)
+  fixture.environment.NODE_OPTIONS = `${fixture.environment.NODE_OPTIONS ?? ''} --require=${hook}`
+  fixture.environment.CHECK_CHANGED_STEP_LIMIT_MS = '50'
+  const child = launch(fixture, cleanup)
+  const output = await captureChildOutput(child)
   const result = await collectExit(child, output)
   assert.equal(result.code, 1, result.text)
   assert.match(result.text, /fail format \(exit killed\)/)
   assert.match(result.text, /cleanup failed:.*kill EPERM/s)
   assert.match(result.text, /LOCAL_HANDLE_RELEASED/)
-  const log = await readFile(f.log, 'utf8')
+  const log = await readFile(fixture.log, 'utf8')
   assert.match(log, /^exec prettier --check/m)
   assert.doesNotMatch(log, laterSteps)
 }).timeout(10_000)
@@ -311,7 +325,7 @@ for (const groupExits of [true, false]) {
   test(`a timed-out child closes before cleanup finishes (group exits: ${groupExits})`, async ({
     cleanup,
   }) => {
-    const f = await fixture()
+    const f = await makeCheckProcessFixture()
     cleanup(() => rm(f.directory, { recursive: true, force: true }))
     const hook = path.join(f.directory, 'close-during-timeout.cjs')
     await writeFile(
@@ -347,10 +361,10 @@ process.kill = (pid, signal) => {
 require('node:module').syncBuiltinESMExports()
 `
     )
-    f.env.NODE_OPTIONS = `--require=${hook}`
-    f.env.CHECK_CHANGED_STEP_LIMIT_MS = '1000'
+    f.environment.NODE_OPTIONS = `--require=${hook}`
+    f.environment.CHECK_CHANGED_STEP_LIMIT_MS = '1000'
     const child = launch(f, cleanup)
-    const output = await outputOf(child)
+    const output = await captureChildOutput(child)
     const result = await collectExit(child, output)
     assert.equal(result.code, 1, result.text)
     assert.match(result.text, /fail format \(exit killed\)/)

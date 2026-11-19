@@ -2,21 +2,21 @@ import { randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
 import { test } from '@japa/runner'
 import type { Fixture } from './helpers.js'
-import { bootFixture, codeOf } from './helpers.js'
+import { bootFixture, readCallOutcome } from './helpers.js'
 
 const PW = 'pw-one-Original-7'
 const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
 let fixture: Fixture
 let users = 0
 
-async function signedIn() {
+async function signInTestUser() {
   const email = `host-${++users}@x.test`
   const id = await fixture.createUser(email, PW)
   return { id, email, input: await fixture.login(email, PW) }
 }
 
 /** The three limiter keys the package derives for an account. */
-function throttleKeys(userId: string | number) {
+function buildThrottleKeys(userId: string | number) {
   const attempts = `password_confirmations:${createHash('sha256').update(String(userId)).digest('hex')}`
   return { attempts, failed: `${attempts}:failed`, blocked: `${attempts}:blocked` }
 }
@@ -32,7 +32,7 @@ test.group('host database compatibility', (group) => {
   test('a host scope foreign key accepts string users, isolates cascades and preserves spending', async ({
     assert,
   }) => {
-    const { id, input } = await signedIn()
+    const { id, input } = await signInTestUser()
     assert.isString(id)
     assert.match(String(id), /^[a-f0-9-]{36}$/)
     const confirmations = await fixture.app.container.make('password_confirmations')
@@ -80,13 +80,13 @@ test.group('host database compatibility', (group) => {
   test('the provider shares the host database limiter across sign-ins and isolates accounts', async ({
     assert,
   }) => {
-    const { email, input } = await signedIn()
+    const { email, input } = await signInTestUser()
     const secondSignIn = await fixture.login(email, PW)
-    const other = await signedIn()
+    const other = await signInTestUser()
     const confirmations = await fixture.app.container.make('password_confirmations')
     const manager = await fixture.app.container.make('limiter.manager')
     const budget = manager.use({ requests: 5, duration: '1 minute' })
-    const keys = throttleKeys(input.userId)
+    const keys = buildThrottleKeys(input.userId)
     for (let i = 0; i < 5; i++) {
       await assert.rejects(
         () =>
@@ -110,7 +110,7 @@ test.group('host database compatibility', (group) => {
       )
     }
     // Both accounts use the same login client key. A different account retains its own budget.
-    const otherKeys = throttleKeys(other.input.userId)
+    const otherKeys = buildThrottleKeys(other.input.userId)
     await assert.rejects(
       () => confirmations.confirmPassword(other.input, { ...request, password: 'wrong' }),
       /Incorrect password/
@@ -128,9 +128,9 @@ test.group('host database compatibility', (group) => {
   }) => {
     const peer = await bootFixture({ hostProfile: true, sharedRoot: fixture.root })
     try {
-      const { email, input } = await signedIn()
+      const { email, input } = await signInTestUser()
       const peerInput = await peer.login(email, PW)
-      const other = await signedIn()
+      const other = await signInTestUser()
       const first = await fixture.app.container.make('password_confirmations')
       const second = await peer.app.container.make('password_confirmations')
       assert.notStrictEqual(
@@ -141,13 +141,13 @@ test.group('host database compatibility', (group) => {
       const incorrect = { ...request, password: 'wrong' }
       for (let attempt = 0; attempt < 4; attempt++) {
         assert.equal(
-          await codeOf(first.confirmPassword(input, incorrect)),
+          await readCallOutcome(first.confirmPassword(input, incorrect)),
           'E_PASSWORD_CONFIRMATION_DENIED'
         )
       }
       // Await the failure that arms the block before either app reads the shared limiter again.
       assert.equal(
-        await codeOf(second.confirmPassword(peerInput, incorrect)),
+        await readCallOutcome(second.confirmPassword(peerInput, incorrect)),
         'E_PASSWORD_CONFIRMATION_DENIED'
       )
       const correct = { ...request, password: PW }
@@ -156,7 +156,7 @@ test.group('host database compatibility', (group) => {
         [second, peerInput],
       ] as const) {
         assert.equal(
-          await codeOf(service.confirmPassword(signIn, correct)),
+          await readCallOutcome(service.confirmPassword(signIn, correct)),
           'E_PASSWORD_CONFIRMATION_THROTTLED'
         )
         const { confirmationId } = await service.confirmPassword(other.input, correct)
@@ -170,10 +170,10 @@ test.group('host database compatibility', (group) => {
   test('the database limiter reserves before hashing a concurrent burst with a pool of one', async ({
     assert,
   }) => {
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     const hash = await fixture.app.container.make('hash')
     let verified = 0
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       verifyPassword: async (stored, password) => {
         verified++
         return hash.verify(stored, password)
