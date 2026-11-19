@@ -30,14 +30,21 @@ node ace configure @kevinjohn/adonisjs-confirm-action-with-password   # --users-
 node ace migration:run
 ```
 
+If the original confirmations-table migration has already run, add a new migration in your host
+application using the [0.2.0 schema upgrade](CHANGELOG.md#upgrade-the-confirmations-table-from-011). Run it before
+deploying the 0.2.0 service. The upgrade clears existing confirmations, so users may be asked to
+confirm their password again.
+
 `configure` writes `config/password_confirmations.ts`, one migration and registers the provider. It never
 overwrites existing files, so a rerun does not apply new flags; it warns when a file it kept
 disagrees with them. After an interrupted or changed setup, check three things:
 
 1. `table` and `usersTable` in `config/password_confirmations.ts` match the table name, the
    `user_id` reference and its column type in
-   `database/migrations/*_create_password_confirmations_table.ts`. Edit whichever is wrong, or
-   delete both and rerun.
+   `database/migrations/*_create_password_confirmations_table.ts`. If the migration has already
+   run, correct the config and use a new host migration for any needed schema changes. If the
+   migration has never run or the setup is disposable, you can delete the generated config and
+   migration and rerun configure.
 2. That migration sorts after `*_account_kit_create_account_sessions.ts`. If it does not and has
    not run, rename it with a later timestamp.
 3. `adonisrc.ts` lists
