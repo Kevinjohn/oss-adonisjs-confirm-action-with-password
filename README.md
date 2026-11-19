@@ -16,7 +16,7 @@ authorizes.
 | Need          | Detail                                                                                                                               |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Node.js       | 24 or later                                                                                                                          |
-| Account Kit   | exactly `0.4.0`; the package reads three Kit storage details (see below)                                                             |
+| Account Kit   | exactly `0.4.1`; the package reads three Kit storage details (see below)                                                             |
 | Login         | Account Kit `authentication.strategy: 'session'` with `sessionManagement` enabled; access tokens give no sign-in row and are refused |
 | Session store | server-side (memory in tests, database or Redis); the cookie store keeps a copied session alive after logout                         |
 | Limiter store | shared (database or Redis) when the app runs more than one process; the memory store counts per process                              |
@@ -25,14 +25,14 @@ authorizes.
 ## Install
 
 ```sh
-pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.2.0/kevinjohn-adonisjs-confirm-action-with-password-0.2.0.tgz
+pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.2.1/kevinjohn-adonisjs-confirm-action-with-password-0.2.1.tgz
 node ace configure @kevinjohn/adonisjs-confirm-action-with-password   # --users-table, --user-id-type as for Account Kit
 node ace migration:run
 ```
 
 If the original confirmations-table migration has already run, add a new migration in your host
 application using the [0.2.0 schema upgrade](CHANGELOG.md#upgrade-the-confirmations-table-from-011). Run it before
-deploying the 0.2.0 service. The upgrade clears existing confirmations, so users may be asked to
+deploying 0.2.0 or later. The upgrade clears existing confirmations, so users may be asked to
 confirm their password again.
 
 `configure` writes `config/password_confirmations.ts`, one migration and registers the provider. It never
@@ -53,7 +53,7 @@ disagrees with them. After an interrupted or changed setup, check three things:
 
 ## User stories
 
-See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.2.0/user-stories/README.md) for the source-reviewed capabilities and boundaries.
+See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.2.1/user-stories/README.md) for the source-reviewed capabilities and boundaries.
 
 ## Use
 
@@ -236,7 +236,7 @@ yourself is not checked against the sign-in or the account lock, and the guarant
 
 ## Account Kit storage this package reads
 
-Account Kit 0.4.0 has no public API for these, so the package reads them directly. That is why it
+Account Kit 0.4.1 has no public API for these, so the package reads them directly. That is why it
 pins the Kit exactly. `tests/kit_coupling.spec.ts` fails with `KIT COUPLING:` if any of them
 changes.
 
@@ -269,7 +269,7 @@ confirm again, and the orphan expires on its own. Every other error rolled back.
 
 ## What ends a confirmation
 
-Every Account Kit 0.4.0 path below is tested to kill an outstanding confirmation, and a spend already in
+Every Account Kit 0.4.1 path below is tested to kill an outstanding confirmation, and a spend already in
 progress commits before the revocation acquires its connection in the single-connection SQLite fixture:
 password change (keeping or ending this sign-in), password reset, logout, `sessions.revoke`,
 `revokeOthers`, `revokeAll`, `changeRestriction`, a completed email change, account deletion,

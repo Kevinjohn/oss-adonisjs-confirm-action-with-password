@@ -28,7 +28,7 @@ interface Account {
 }
 
 /**
- * Every Account Kit 0.4.0 path that ends a sign-in or changes credentials or account state. Each
+ * Every Account Kit 0.4.1 path that ends a sign-in or changes credentials or account state. Each
  * returns the inputs a client could still present afterwards (kept sessions get their new revision).
  */
 const paths: Record<string, (account: Account) => Promise<CurrentAccountInput[]>> = {
