@@ -14,33 +14,33 @@ import { PasswordConfirmations } from '../src/password_confirmations.js'
 import { defineConfig } from '../src/define_config.js'
 import type { ConfirmationThrottle, PasswordConfirmationsConfig } from '../src/types.js'
 import type { Fixture } from './helpers.js'
-import { bootFixture, codeOf } from './helpers.js'
+import { bootFixture, readCallOutcome } from './helpers.js'
 
 const PW = 'pw-one-Original-7'
 const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
 
 let fixture: Fixture
 let users = 0
-async function signedIn() {
+async function signInTestUser() {
   const email = `throttled-${++users}@x.test`
   await fixture.createUser(email, PW)
   return { email, input: await fixture.login(email, PW) }
 }
 
-/** Resolves `reached` once `mark()` has been called `count` times: a stage announcing itself. */
-function entry(count = 1) {
+/** Resolves `reached` once `markArrival()` has been called `count` times: a stage announcing itself. */
+function makeLimiterEntry(count = 1) {
   const reached = Promise.withResolvers<void>()
   let seen = 0
   return {
     reached: reached.promise,
-    mark() {
+    markArrival() {
       if (++seen === count) reached.resolve()
     },
   }
 }
 
 /** The three limiter keys the package derives for an account. */
-function throttleKeys(userId: string | number) {
+function buildThrottleKeys(userId: string | number) {
   const attempts = `password_confirmations:${createHash('sha256').update(String(userId)).digest('hex')}`
   return { attempts, failed: `${attempts}:failed`, blocked: `${attempts}:blocked` }
 }
@@ -57,7 +57,7 @@ async function withHeldLimiter(
 ) {
   const manager = await fixture.app.container.make('limiter.manager')
   const hash = await fixture.app.container.make('hash')
-  const held = (limiter: Limiter): Limiter =>
+  const wrapHeldLimiter = (limiter: Limiter): Limiter =>
     new Proxy(limiter, {
       get(target, property, receiver) {
         const value = Reflect.get(target, property, receiver)
@@ -78,7 +78,7 @@ async function withHeldLimiter(
     db: fixture.db,
     limiter: {
       use: ((options: ConfirmationThrottle) =>
-        held(manager.use(options))) as unknown as typeof manager.use,
+        wrapHeldLimiter(manager.use(options))) as unknown as typeof manager.use,
     },
     config: defineConfig(config),
     verifyPassword: (hashed, password) => hash.verify(hashed, password),
@@ -101,30 +101,30 @@ test.group('Wrong-password throttling', (group) => {
   }) => {
     const refunds = Promise.withResolvers<void>()
     const hashGate = Promise.withResolvers<void>()
-    const hashing = entry(2)
-    const refunding = entry(2)
+    const hashing = makeLimiterEntry(2)
+    const refunding = makeLimiterEntry(2)
     const hash = await fixture.app.container.make('hash')
     const confirmations = await withHeldLimiter(
       {
         throttle: { requests: 2, duration: '1 minute', blockDuration: '20 minutes' },
         verifyPassword: async (hashed, password) => {
-          hashing.mark()
+          hashing.markArrival()
           await hashGate.promise
           return hash.verify(hashed, password)
         },
       },
       { decrement: refunds.promise },
-      { decrement: refunding.mark }
+      { decrement: refunding.markArrival }
     )
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     // Two wrong attempts hold the budget while two more are rejected; their refunds are delayed
     // until after the wrong passwords have blocked the account.
     const wrong = [1, 2].map(() =>
-      codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' }))
+      readCallOutcome(confirmations.confirmPassword(input, { ...request, password: 'nope' }))
     )
     await hashing.reached
     const rejected = [1, 2].map(() =>
-      codeOf(confirmations.confirmPassword(input, { ...request, password: PW }))
+      readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW }))
     )
     await refunding.reached
     hashGate.resolve()
@@ -138,7 +138,7 @@ test.group('Wrong-password throttling', (group) => {
       'E_PASSWORD_CONFIRMATION_THROTTLED',
     ])
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_THROTTLED'
     )
   })
@@ -147,14 +147,16 @@ test.group('Wrong-password throttling', (group) => {
     assert,
   }) => {
     const reset = Promise.withResolvers<void>()
-    const resetting = entry()
+    const resetting = makeLimiterEntry()
     const confirmations = await withHeldLimiter(
       { window: '2m' },
       { delete: reset.promise },
-      { delete: resetting.mark }
+      { delete: resetting.markArrival }
     )
-    const { input } = await signedIn()
-    const issuing = codeOf(confirmations.confirmPassword(input, { ...request, password: PW }))
+    const { input } = await signInTestUser()
+    const issuing = readCallOutcome(
+      confirmations.confirmPassword(input, { ...request, password: PW })
+    )
     // The reset is requested only after the password was checked and its time recorded.
     await resetting.reached
     // The limiter reset stalls for the whole window after the password was checked.
@@ -166,26 +168,26 @@ test.group('Wrong-password throttling', (group) => {
   test('a burst behind a full budget is refused, right password included', async ({ assert }) => {
     const hash = await fixture.app.container.make('hash')
     const hashGate = Promise.withResolvers<void>()
-    const hashing = entry(5)
+    const hashing = makeLimiterEntry(5)
     let verified = 0
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 5, duration: '1 minute', blockDuration: '20 minutes' },
       verifyPassword: async (hashed, password) => {
         verified++
-        hashing.mark()
+        hashing.markArrival()
         await hashGate.promise
         return hash.verify(hashed, password)
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     const admitted = Array.from({ length: 5 }, (_, i) =>
-      codeOf(confirmations.confirmPassword(input, { ...request, password: `nope-${i}` }))
+      readCallOutcome(confirmations.confirmPassword(input, { ...request, password: `nope-${i}` }))
     )
     // All five checks hold the budget before anything else is submitted.
     await hashing.reached
     const late = await Promise.all(
       Array.from({ length: 25 }, (_, i) =>
-        codeOf(
+        readCallOutcome(
           confirmations.confirmPassword(input, {
             ...request,
             password: i === 24 ? PW : `late-${i}`,
@@ -202,7 +204,7 @@ test.group('Wrong-password throttling', (group) => {
     assert.equal(verified, 5)
     // Five wrong passwords completed, so the right one is refused afterwards too.
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_THROTTLED'
     )
   })
@@ -212,24 +214,24 @@ test.group('Wrong-password throttling', (group) => {
   }) => {
     const hash = await fixture.app.container.make('hash')
     const wrongGate = Promise.withResolvers<void>()
-    const hashing = entry(4)
-    const confirmations = fixture.confirmations({
+    const hashing = makeLimiterEntry(4)
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 5, duration: '1 minute', blockDuration: '20 minutes' },
       verifyPassword: async (hashed, password) => {
         if (password !== PW) {
-          hashing.mark()
+          hashing.markArrival()
           await wrongGate.promise
         }
         return hash.verify(hashed, password)
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     const wrong = Array.from({ length: 4 }, (_, i) =>
-      codeOf(confirmations.confirmPassword(input, { ...request, password: `nope-${i}` }))
+      readCallOutcome(confirmations.confirmPassword(input, { ...request, password: `nope-${i}` }))
     )
     await hashing.reached
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'resolved'
     )
     wrongGate.resolve()
@@ -237,13 +239,15 @@ test.group('Wrong-password throttling', (group) => {
   })
 
   test('the block outlasts the counting window and then lifts', async ({ assert }) => {
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 2, duration: '1s', blockDuration: '4s' },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     for (let i = 0; i < 2; i++) {
       assert.equal(
-        await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
+        await readCallOutcome(
+          confirmations.confirmPassword(input, { ...request, password: 'nope' })
+        ),
         'E_PASSWORD_CONFIRMATION_DENIED'
       )
     }
@@ -255,31 +259,33 @@ test.group('Wrong-password throttling', (group) => {
     // Past the 1 s counting window, still inside the 4 s block.
     await new Promise((resolve) => setTimeout(resolve, 1_500))
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_THROTTLED'
     )
     await new Promise((resolve) => setTimeout(resolve, 3_000))
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'resolved'
     )
   })
 
   test('the budget is per account across actions and scopes', async ({ assert }) => {
-    const confirmations = fixture.confirmations({ throttle: { requests: 3 } })
-    const { input } = await signedIn()
+    const confirmations = fixture.makePasswordConfirmations({ throttle: { requests: 3 } })
+    const { input } = await signInTestUser()
     for (const changed of [
       { ...request, action: 'import' },
       { ...request, scope: 'company-2' },
       { ...request, action: 'anonymise', intent: {} },
     ]) {
       assert.equal(
-        await codeOf(confirmations.confirmPassword(input, { ...changed, password: 'nope' })),
+        await readCallOutcome(
+          confirmations.confirmPassword(input, { ...changed, password: 'nope' })
+        ),
         'E_PASSWORD_CONFIRMATION_DENIED'
       )
     }
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_THROTTLED'
     )
   })
@@ -287,17 +293,17 @@ test.group('Wrong-password throttling', (group) => {
   test('a non-string password is refused like a wrong one and counts', async ({ assert }) => {
     const hash = await fixture.app.container.make('hash')
     const hashed: unknown[] = []
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 2 },
       verifyPassword: async (stored, password) => {
         hashed.push(password)
         return hash.verify(stored, password)
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     for (const password of [123, null]) {
       assert.equal(
-        await codeOf(
+        await readCallOutcome(
           confirmations.confirmPassword(input, {
             ...request,
             password: password as unknown as string,
@@ -309,7 +315,7 @@ test.group('Wrong-password throttling', (group) => {
     // Refused before the hash: a non-string never reaches the hash service.
     assert.deepEqual(hashed, [])
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_THROTTLED'
     )
   })
@@ -317,14 +323,14 @@ test.group('Wrong-password throttling', (group) => {
   test('a hash failure is not a wrong guess and gives the attempt back', async ({ assert }) => {
     const hash = await fixture.app.container.make('hash')
     let broken = true
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 1 },
       verifyPassword: async (hashed, password) => {
         if (broken) throw new Error('hash backend down')
         return hash.verify(hashed, password)
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     for (let i = 0; i < 3; i++) {
       const error = await confirmations
         .confirmPassword(input, { ...request, password: PW })
@@ -333,7 +339,7 @@ test.group('Wrong-password throttling', (group) => {
     }
     broken = false
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'resolved'
     )
   })
@@ -358,7 +364,7 @@ test.group('Wrong-password throttling', (group) => {
       config: defineConfig({ throttle: { requests: 1 } }),
       verifyPassword: async () => Promise.reject(verifierFault),
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     const error = await confirmations
       .confirmPassword(input, { ...request, password: PW })
       .catch((e) => e)
@@ -371,26 +377,26 @@ test.group('Wrong-password throttling', (group) => {
     const hash = await fixture.app.container.make('hash')
     let release!: () => void
     const gate = new Promise<void>((resolve) => (release = resolve))
-    const hashing = entry()
+    const hashing = makeLimiterEntry()
     let fault = true
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 1 },
       verifyPassword: async (hashed, password) => {
         if (fault) {
           fault = false
-          hashing.mark()
+          hashing.markArrival()
           await gate
           throw new Error('hash backend down')
         }
         return hash.verify(hashed, password)
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     // A holds the only slot while its hash hangs; B arrives and is throttled; then A faults.
     const first = confirmations.confirmPassword(input, { ...request, password: PW }).catch((e) => e)
     await hashing.reached
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_THROTTLED'
     )
     release()
@@ -398,7 +404,7 @@ test.group('Wrong-password throttling', (group) => {
     assert.equal(faulted.message, 'hash backend down')
     // A's slot came back in full, so the right password goes through.
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'resolved'
     )
   })
@@ -408,28 +414,28 @@ test.group('Wrong-password throttling', (group) => {
   }) => {
     const hash = await fixture.app.container.make('hash')
     const faultGate = Promise.withResolvers<void>()
-    const hashing = entry()
+    const hashing = makeLimiterEntry()
     let fault = true
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 2 },
       verifyPassword: async (hashed, password) => {
         if (fault) {
           fault = false
-          hashing.mark()
+          hashing.markArrival()
           await faultGate.promise
           throw new Error('hash backend down')
         }
         return hash.verify(hashed, password)
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     // Two checks hold the whole budget; only one of them ends as a wrong password.
     const faulting = confirmations
       .confirmPassword(input, { ...request, password: PW })
       .catch((e) => e)
     await hashing.reached
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
       'E_PASSWORD_CONFIRMATION_DENIED'
     )
     faultGate.resolve()
@@ -437,7 +443,7 @@ test.group('Wrong-password throttling', (group) => {
     assert.equal(faulted.message, 'hash backend down')
     // One failure against a budget of two: the right password still goes through.
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'resolved'
     )
   })
@@ -447,21 +453,21 @@ test.group('Wrong-password throttling', (group) => {
   }) => {
     const hash = await fixture.app.container.make('hash')
     const faultGate = Promise.withResolvers<void>()
-    const hashing = entry()
+    const hashing = makeLimiterEntry()
     let fault = true
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 3 },
       verifyPassword: async (hashed, password) => {
         if (fault) {
           fault = false
-          hashing.mark()
+          hashing.markArrival()
           await faultGate.promise
           throw new Error('hash backend down')
         }
         return hash.verify(hashed, password)
       },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     const faulting = confirmations
       .confirmPassword(input, { ...request, password: PW })
       .catch((e) => e)
@@ -470,7 +476,9 @@ test.group('Wrong-password throttling', (group) => {
     await confirmations.confirmPassword(input, { ...request, password: PW })
     for (let i = 0; i < 2; i++) {
       assert.equal(
-        await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
+        await readCallOutcome(
+          confirmations.confirmPassword(input, { ...request, password: 'nope' })
+        ),
         'E_PASSWORD_CONFIRMATION_DENIED'
       )
     }
@@ -479,11 +487,11 @@ test.group('Wrong-password throttling', (group) => {
     const faulted = await faulting
     assert.equal(faulted.message, 'hash backend down')
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
       'E_PASSWORD_CONFIRMATION_DENIED'
     )
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_THROTTLED'
     )
   })
@@ -496,23 +504,25 @@ test.group('Wrong-password throttling', (group) => {
       {},
       { consume: record, get: record, increment: record, set: record, delete: record }
     )
-    const { input } = await signedIn()
-    await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' }))
-    await codeOf(confirmations.confirmPassword(input, { ...request, password: PW }))
-    const expected = throttleKeys(input.userId)
+    const { input } = await signInTestUser()
+    await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: 'nope' }))
+    await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW }))
+    const expected = buildThrottleKeys(input.userId)
     assert.deepEqual([...keys].sort(), Object.values(expected).sort())
     // 23 + 64 + 8: inside the 255-character key column of the limiter's database store.
     for (const key of keys) assert.isAtMost(key.length, 95)
   })
 
   test('a block shorter than the counting window ends when it says it will', async ({ assert }) => {
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 2, duration: '1 minute', blockDuration: '1s' },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     for (let i = 0; i < 2; i++) {
       assert.equal(
-        await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
+        await readCallOutcome(
+          confirmations.confirmPassword(input, { ...request, password: 'nope' })
+        ),
         'E_PASSWORD_CONFIRMATION_DENIED'
       )
     }
@@ -524,19 +534,21 @@ test.group('Wrong-password throttling', (group) => {
     // This wait measures the block's own time-to-live; the counting window has 58 s left.
     await new Promise((resolve) => setTimeout(resolve, 1_500))
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'resolved'
     )
   })
 
   test('a throttled retry during the block never extends it', async ({ assert }) => {
-    const confirmations = fixture.confirmations({
+    const confirmations = fixture.makePasswordConfirmations({
       throttle: { requests: 2, duration: '1s', blockDuration: '2s' },
     })
-    const { input } = await signedIn()
+    const { input } = await signInTestUser()
     for (let i = 0; i < 2; i++) {
       assert.equal(
-        await codeOf(confirmations.confirmPassword(input, { ...request, password: 'nope' })),
+        await readCallOutcome(
+          confirmations.confirmPassword(input, { ...request, password: 'nope' })
+        ),
         'E_PASSWORD_CONFIRMATION_DENIED'
       )
     }
@@ -545,12 +557,12 @@ test.group('Wrong-password throttling', (group) => {
     // measure the block's own time-to-live.
     await new Promise((resolve) => setTimeout(resolve, 1_300))
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'E_PASSWORD_CONFIRMATION_THROTTLED'
     )
     await new Promise((resolve) => setTimeout(resolve, blockedAt + 2_500 - Date.now()))
     assert.equal(
-      await codeOf(confirmations.confirmPassword(input, { ...request, password: PW })),
+      await readCallOutcome(confirmations.confirmPassword(input, { ...request, password: PW })),
       'resolved'
     )
   })

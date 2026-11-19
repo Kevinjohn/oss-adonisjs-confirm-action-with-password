@@ -17,7 +17,7 @@ import { PasswordConfirmationRequiredException } from './errors.js'
  * change, reset and restriction change; `null` means no credential change has happened yet. This is
  * a Kit storage detail the package reads, which is why the Kit is pinned to an exact version.
  */
-export async function liveCredentialRevision(trx: Trx, usersTable: string, userId: UserId) {
+export async function readCredentialRevision(trx: Trx, usersTable: string, userId: UserId) {
   const row = await trx
     .from(usersTable)
     .select('credentials_changed_at')

@@ -32,18 +32,18 @@ test.group('provider and service', () => {
 
   /** Registers the provider on a bare container with the given config and no limiter binding. */
   function registerWithout(config: unknown) {
-    const bindings = new Map<unknown, (resolver: unknown) => Promise<unknown>>()
+    const bindingsByKey = new Map<unknown, (resolver: unknown) => Promise<unknown>>()
     const app = {
       config: { get: () => config },
       container: {
         singleton: (key: unknown, factory: (resolver: unknown) => Promise<unknown>) =>
-          bindings.set(key, factory),
+          bindingsByKey.set(key, factory),
         alias: () => {},
         hasBinding: () => false,
       },
     }
     new PasswordConfirmationsProvider(app as never).register()
-    return () => bindings.get(PasswordConfirmations)!({ make: async () => ({}) })
+    return () => bindingsByKey.get(PasswordConfirmations)!({ make: async () => ({}) })
   }
 
   test('a missing config/password_confirmations.ts is a configuration error', async ({

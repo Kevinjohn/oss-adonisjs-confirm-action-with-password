@@ -5,14 +5,14 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from '@japa/runner'
-import { collectExit, outputOf } from '../helpers/child_process.js'
+import { collectExit, captureChildOutput } from '../helpers/child_process.js'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 
 /** Run the repository's bin/test.ts in a checkout holding only the given spec files. */
 async function runSpecs(
   specs: Record<string, string>,
-  cleanup: (fn: () => void | Promise<void>) => void
+  cleanup: (callback: () => void | Promise<void>) => void
 ) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'confirm-action-test-runner-'))
   cleanup(() => rm(root, { recursive: true, force: true }))
@@ -33,7 +33,7 @@ async function runSpecs(
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   cleanup(() => void child.kill('SIGKILL'))
-  return collectExit(child, await outputOf(child))
+  return collectExit(child, await captureChildOutput(child))
 }
 
 const skipped = `import { test } from '@japa/runner'\ntest('never runs', () => {\n  throw new Error('ran')\n}).skip(true)\n`

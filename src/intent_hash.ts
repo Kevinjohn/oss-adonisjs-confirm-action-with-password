@@ -21,7 +21,7 @@ const MAX_NAME = 255
  * properties on an array are not part of it, so two values that differ only there share a hash.
  * `__proto__` is an ordinary own key.
  */
-function canonical(value: unknown, depth = 0): string {
+function serializeCanonicalIntent(value: unknown, depth = 0): string {
   if (depth > 32)
     throw new InvalidPasswordConfirmationRequestException('intent is nested too deeply')
   if (value === null || typeof value === 'boolean' || typeof value === 'string') {
@@ -41,7 +41,7 @@ function canonical(value: unknown, depth = 0): string {
   }
   // Array.from visits holes as undefined, so a sparse array is refused like any other non-JSON value.
   if (Array.isArray(value)) {
-    return `[${Array.from(value, (item) => canonical(item, depth + 1)).join(',')}]`
+    return `[${Array.from(value, (item) => serializeCanonicalIntent(item, depth + 1)).join(',')}]`
   }
   if (typeof value === 'object') {
     const prototype = Object.getPrototypeOf(value)
@@ -52,14 +52,14 @@ function canonical(value: unknown, depth = 0): string {
     }
     const keys = Object.keys(value).sort()
     const record = value as Record<string, unknown>
-    return `{${keys.map((key) => `${JSON.stringify(key)}:${canonical(record[key], depth + 1)}`).join(',')}}`
+    return `{${keys.map((key) => `${JSON.stringify(key)}:${serializeCanonicalIntent(record[key], depth + 1)}`).join(',')}}`
   }
   throw new InvalidPasswordConfirmationRequestException(
     'intent must contain plain JSON values only'
   )
 }
 
-function name(value: unknown, field: string) {
+function requireBoundedName(value: unknown, field: string) {
   if (typeof value !== 'string' || value.length === 0 || value.length > MAX_NAME) {
     throw new InvalidPasswordConfirmationRequestException(
       `${field} must be a string of 1-${MAX_NAME} characters`
@@ -69,13 +69,13 @@ function name(value: unknown, field: string) {
 }
 
 /** Validates a request and returns its normalized binding: action, scope and intent hash. */
-export function bindRequest(request: ConfirmationRequest) {
-  const action = name(request.action, 'action')
-  const scope = name(request.scope, 'scope')
+export function buildConfirmationBinding(request: ConfirmationRequest) {
+  const action = requireBoundedName(request.action, 'action')
+  const scope = requireBoundedName(request.scope, 'scope')
   if (request.intent === undefined)
     throw new InvalidPasswordConfirmationRequestException('intent is required')
   const intentHash = createHash('sha256')
-    .update(canonical({ action, scope, intent: request.intent }))
+    .update(serializeCanonicalIntent({ action, scope, intent: request.intent }))
     .digest('hex')
   return { action, scope, intentHash }
 }

@@ -13,8 +13,8 @@ import { errors as limiterErrors } from '@adonisjs/limiter'
 import type { Limiter, LimiterManager } from '@adonisjs/limiter'
 import type { AccountKit } from '@kevinjohn/adonisjs-account-kit'
 import type { CurrentAccountInput, Trx, UserId } from '@kevinjohn/adonisjs-account-kit/types'
-import { liveCredentialRevision } from './credential_revision.js'
-import { bindRequest } from './intent_hash.js'
+import { readCredentialRevision } from './credential_revision.js'
+import { buildConfirmationBinding } from './intent_hash.js'
 import {
   PasswordConfirmationDeniedException,
   PasswordConfirmationForbiddenException,
@@ -45,7 +45,7 @@ export interface PasswordConfirmationsDependencies {
   now?: () => number
 }
 
-function affected(result: unknown) {
+function extractAffectedRowCount(result: unknown) {
   return Array.isArray(result) ? Number(result[0]) : Number(result)
 }
 
@@ -55,30 +55,30 @@ function affected(result: unknown) {
  * account lock; the password hash runs between two such transactions, never inside one.
  */
 export class PasswordConfirmations {
-  readonly #kit: PasswordConfirmationsDependencies['kit']
+  readonly #accountKit: PasswordConfirmationsDependencies['kit']
   readonly #db: Database
   readonly #config: ResolvedPasswordConfirmationsConfig
-  readonly #verify: PasswordConfirmationsDependencies['verifyPassword']
-  readonly #now: () => number
+  readonly #verifyPassword: PasswordConfirmationsDependencies['verifyPassword']
+  readonly #readNow: () => number
   readonly #throttle?: Limiter
 
-  constructor(deps: PasswordConfirmationsDependencies) {
-    this.#kit = deps.kit
-    this.#db = deps.db
-    this.#config = deps.config
-    this.#verify = deps.config.verifyPassword ?? deps.verifyPassword
-    this.#now = deps.now ?? Date.now
-    const throttle = deps.config.throttle
+  constructor(dependencies: PasswordConfirmationsDependencies) {
+    this.#accountKit = dependencies.kit
+    this.#db = dependencies.db
+    this.#config = dependencies.config
+    this.#verifyPassword = dependencies.config.verifyPassword ?? dependencies.verifyPassword
+    this.#readNow = dependencies.now ?? Date.now
+    const throttle = dependencies.config.throttle
     if (throttle) {
-      if (!deps.limiter) {
+      if (!dependencies.limiter) {
         throw new InvalidPasswordConfirmationsConfigException(
           'throttle needs @adonisjs/limiter; register its provider or set throttle: false'
         )
       }
       // No blockDuration here: the store would block again each time a throttled retry crosses the
-      // limit, extending the block for as long as the user keeps trying. #countFailure is the only
+      // limit, extending the block for as long as the user keeps trying. #recordPasswordFailure is the only
       // place a block starts, after a wrong password.
-      this.#throttle = deps.limiter.use({
+      this.#throttle = dependencies.limiter.use({
         requests: throttle.requests,
         duration: throttle.duration,
       })
@@ -90,7 +90,7 @@ export class PasswordConfirmations {
     return this.#config.windowMs
   }
 
-  async #authorize(context: KitContext, request: ConfirmationRequest) {
+  async #assertConfirmationAllowed(context: KitContext, request: ConfirmationRequest) {
     // Host policy sees only what the confirmation binds: never the password or the confirmation id.
     const { action, scope, intent } = request
     if ((await this.#config.authorize(context, { action, scope, intent })) !== true) {
@@ -100,23 +100,23 @@ export class PasswordConfirmations {
 
   /**
    * Three fixed-width keys per account, so a long string id cannot outgrow the limiter store's key
-   * column. `attempts` counts reservations (checks in flight plus wrong passwords) and caps the
-   * hashes a burst can run; `failed` counts completed wrong passwords only; `blocked` is the block
-   * they arm. A refund touches `attempts` alone, so it can neither erase a failure nor open a block.
+   * column. `attemptKey` counts reservations (checks in flight plus wrong passwords) and caps the
+   * hashes a burst can run; `failureKey` counts completed wrong passwords only; `blockKey` is the block
+   * they arm. A refund touches `attemptKey` alone, so it can neither erase a failure nor open a block.
    */
-  #throttleKeys(userId: UserId) {
-    const account = createHash('sha256').update(String(userId)).digest('hex')
-    const attempts = `password_confirmations:${account}`
-    return { attempts, failed: `${attempts}:failed`, blocked: `${attempts}:blocked` }
+  #buildThrottleKeys(userId: UserId) {
+    const userIdHash = createHash('sha256').update(String(userId)).digest('hex')
+    const attemptKey = `password_confirmations:${userIdHash}`
+    return { attemptKey, failureKey: `${attemptKey}:failed`, blockKey: `${attemptKey}:blocked` }
   }
 
   /** Account Kit's login pattern: consume first, refuse when the budget is gone. */
-  async #reserveAttempt(keys: { attempts: string; blocked: string }) {
-    const block = await this.#throttle!.get(keys.blocked)
+  async #reserveAttempt(keys: { attemptKey: string; blockKey: string }) {
+    const block = await this.#throttle!.get(keys.blockKey)
     if (block && block.consumed > 0) {
       throw new PasswordConfirmationThrottledException(block.availableIn)
     }
-    const key = keys.attempts
+    const key = keys.attemptKey
     try {
       await this.#throttle!.consume(key)
     } catch (error) {
@@ -133,26 +133,26 @@ export class PasswordConfirmations {
    * completed. Checks still in flight are not failures: they do not arm the block. The block has
    * its own key, so a throttled retry never extends it.
    */
-  async #countFailure(keys: { attempts: string; failed: string; blocked: string }) {
+  async #recordPasswordFailure(keys: { attemptKey: string; failureKey: string; blockKey: string }) {
     const throttle = this.#config.throttle
-    const failed = await this.#throttle!.increment(keys.failed)
-    if (throttle && failed.consumed >= throttle.requests) {
-      await this.#throttle!.set(keys.blocked, 1, throttle.blockDuration)
+    const failureIncrement = await this.#throttle!.increment(keys.failureKey)
+    if (throttle && failureIncrement.consumed >= throttle.requests) {
+      await this.#throttle!.set(keys.blockKey, 1, throttle.blockDuration)
       // From here the block alone decides, for exactly blockDuration. Left in place, a spent
       // budget would keep refusing after a block shorter than the counting window had lapsed.
       await Promise.all([
-        this.#throttle!.delete(keys.attempts),
-        this.#throttle!.delete(keys.failed),
+        this.#throttle!.delete(keys.attemptKey),
+        this.#throttle!.delete(keys.failureKey),
       ])
     }
   }
 
-  #signInId(context: KitContext) {
+  #requireSignInId(context: KitContext) {
     if (context.signInId === undefined) throw new SessionRegistryRequiredException()
     return context.signInId
   }
 
-  async #passwordHash(userId: UserId, trx: Trx) {
+  async #readPasswordHash(userId: UserId, trx: Trx) {
     if (this.#config.readPasswordHash) return this.#config.readPasswordHash(userId, trx)
     const row = await trx
       .from(this.#config.usersTable)
@@ -175,34 +175,37 @@ export class PasswordConfirmations {
     // The Kit reads these fields on every call. A host that refreshes its credential object in
     // place must not move stage two onto another sign-in than the one whose hash was checked.
     const current = { ...input }
-    const binding = bindRequest(request)
-    const first = await this.#kit.authentication.withCurrent(current, async (context) => {
-      this.#signInId(context)
-      await this.#authorize(context, request)
-      return {
-        userId: context.account.id,
-        // An account the Kit reports as passwordless cannot confirm with one, whatever is stored:
-        // Account Kit's login refuses it too. A null hash is a wrong password and counts as one.
-        hash: context.account.hasPassword
-          ? await this.#passwordHash(context.account.id, context.trx)
-          : null,
+    const binding = buildConfirmationBinding(request)
+    const issuanceSnapshot = await this.#accountKit.authentication.withCurrent(
+      current,
+      async (context) => {
+        this.#requireSignInId(context)
+        await this.#assertConfirmationAllowed(context, request)
+        return {
+          userId: context.account.id,
+          // An account the Kit reports as passwordless cannot confirm with one, whatever is stored:
+          // Account Kit's login refuses it too. A null hash is a wrong password and counts as one.
+          hash: context.account.hasPassword
+            ? await this.#readPasswordHash(context.account.id, context.trx)
+            : null,
+        }
       }
-    })
+    )
     // Reserve an attempt atomically before the hash, so a parallel burst cannot run more hashes than
     // the budget (penalize checks then increments, which a burst races through).
-    const throttleKeys = this.#throttleKeys(first.userId)
+    const throttleKeys = this.#buildThrottleKeys(issuanceSnapshot.userId)
     if (this.#throttle) await this.#reserveAttempt(throttleKeys)
-    let ok: boolean
+    let isPasswordCorrect: boolean
     try {
-      ok =
+      isPasswordCorrect =
         typeof request.password === 'string' &&
-        first.hash !== null &&
-        (await this.#verify(first.hash, request.password))
+        issuanceSnapshot.hash !== null &&
+        (await this.#verifyPassword(issuanceSnapshot.hash, request.password))
     } catch (error) {
       // An infrastructure fault is not a wrong guess: give the attempt back. If the refund fails
       // too, report both; whether the attempt is still charged is then unknown.
       try {
-        if (this.#throttle) await this.#throttle.decrement(throttleKeys.attempts)
+        if (this.#throttle) await this.#throttle.decrement(throttleKeys.attemptKey)
       } catch (refundError) {
         throw new AggregateError(
           [error, refundError],
@@ -212,31 +215,32 @@ export class PasswordConfirmations {
       }
       throw error
     }
-    if (!ok) {
-      if (this.#throttle) await this.#countFailure(throttleKeys)
+    if (!isPasswordCorrect) {
+      if (this.#throttle) await this.#recordPasswordFailure(throttleKeys)
       throw new PasswordConfirmationDeniedException()
     }
     // The window runs from the check itself, not from the limiter reset that follows it.
-    const verifiedAt = this.#now()
+    const verifiedAt = this.#readNow()
     if (this.#throttle) {
       // A correct password resets the budget. No block can exist here: arming one takes `requests`
       // completed failures, and this check held one of the `requests` slots.
       await Promise.all([
-        this.#throttle.delete(throttleKeys.attempts),
-        this.#throttle.delete(throttleKeys.failed),
+        this.#throttle.delete(throttleKeys.attemptKey),
+        this.#throttle.delete(throttleKeys.failureKey),
       ])
     }
 
-    return this.#kit.authentication.withCurrent(current, async (context) => {
-      if (context.account.id !== first.userId) throw new PasswordConfirmationRequiredException()
-      const signInId = this.#signInId(context)
-      await this.#authorize(context, request)
-      const issuedAt = this.#now()
+    return this.#accountKit.authentication.withCurrent(current, async (context) => {
+      if (context.account.id !== issuanceSnapshot.userId)
+        throw new PasswordConfirmationRequiredException()
+      const signInId = this.#requireSignInId(context)
+      await this.#assertConfirmationAllowed(context, request)
+      const issuedAt = this.#readNow()
       // The deadline is stored, so a later change to `window` cannot move it for this confirmation.
       const expiresAt = verifiedAt + this.#config.windowMs
       // Same input, so withCurrent has re-checked this sign-in and its credential revision.
       if (issuedAt >= expiresAt) throw new PasswordConfirmationStaleException()
-      const revision = await liveCredentialRevision(
+      const revision = await readCredentialRevision(
         context.trx,
         this.#config.usersTable,
         context.account.id
@@ -273,14 +277,14 @@ export class PasswordConfirmations {
    * with the caller's transaction.
    */
   async consume(context: KitContext, request: ConsumeRequest) {
-    const signInId = this.#signInId(context)
-    const binding = bindRequest(request)
-    await this.#authorize(context, request)
+    const signInId = this.#requireSignInId(context)
+    const binding = buildConfirmationBinding(request)
+    await this.#assertConfirmationAllowed(context, request)
     if (typeof request.confirmationId !== 'string' || request.confirmationId === '') {
       throw new PasswordConfirmationRequiredException()
     }
-    const now = this.#now()
-    const revision = await liveCredentialRevision(
+    const now = this.#readNow()
+    const revision = await readCredentialRevision(
       context.trx,
       this.#config.usersTable,
       context.account.id
@@ -304,7 +308,7 @@ export class PasswordConfirmations {
     // null never matches a non-null revision.
     if (revision === null) query.whereNull('credential_revision')
     else query.where('credential_revision', revision)
-    if (affected(await query.update({ consumed_at: now })) !== 1) {
+    if (extractAffectedRowCount(await query.update({ consumed_at: now })) !== 1) {
       throw new PasswordConfirmationRequiredException()
     }
   }
@@ -315,7 +319,7 @@ export class PasswordConfirmations {
     request: ConsumeRequest,
     run: (context: KitContext) => Promise<T>
   ): Promise<T> {
-    return this.#kit.authentication.withCurrent(input, async (context) => {
+    return this.#accountKit.authentication.withCurrent(input, async (context) => {
       await this.consume(context, request)
       return run(context)
     })
@@ -323,10 +327,10 @@ export class PasswordConfirmations {
 
   /** Deletes spent and expired confirmations. Schedule it; returns the number of rows removed. */
   async prune() {
-    return affected(
+    return extractAffectedRowCount(
       await this.#db
         .from(this.#config.table)
-        .where('expires_at', '<=', this.#now())
+        .where('expires_at', '<=', this.#readNow())
         .orWhereNotNull('consumed_at')
         .delete()
     )
