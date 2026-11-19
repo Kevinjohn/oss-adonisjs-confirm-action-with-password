@@ -168,7 +168,7 @@ function run(
     active = child
     let output = ''
     let spawnError: Error | undefined
-    let timedOut = false
+    let timeoutCleanup: Promise<void> | undefined
     let closeWait: NodeJS.Timeout | undefined
     // Keep a bounded tail: the summary line and the 40 printed lines are at the end.
     const append = (chunk: Buffer | string) => {
@@ -178,9 +178,9 @@ function run(
     child.stdout.on('data', append)
     child.stderr.on('data', append)
     const timer = setTimeout(() => {
-      timedOut = true
       output += `\n[check:changed] stopped after ${stepLimitMs / 60000} minutes\n`
-      terminateOwnedProcess(child).then(
+      timeoutCleanup = Promise.resolve().then(() => terminateOwnedProcess(child))
+      void timeoutCleanup.then(
         () => {
           if (settled) return
           // The group is gone, but an escaped descendant can still hold the pipes open.
@@ -217,6 +217,13 @@ function run(
       clearTimeout(timer)
       clearTimeout(closeWait)
       let cleanupError: unknown = terminalError
+      if (timeoutCleanup) {
+        try {
+          await timeoutCleanup
+        } catch (error) {
+          cleanupError = error
+        }
+      }
       if (interruptedBy && interruptionCleanup) {
         try {
           await interruptionCleanup
@@ -230,7 +237,7 @@ function run(
       if (cleanupError !== undefined) {
         output += `\n[check:changed] cleanup failed: ${describeError(cleanupError)}\n`
       }
-      resolve({ status: timedOut || signal ? null : status, output, cleanupError })
+      resolve({ status: timeoutCleanup || signal ? null : status, output, cleanupError })
     }
     child.once('close', (status, signal) => void finish(status, signal))
   })
