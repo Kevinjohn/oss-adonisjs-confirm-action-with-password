@@ -2,3 +2,4 @@ allowBuilds:
   '@swc/core': true
   better-sqlite3: true
   esbuild: true
+  '@kevinjohn/adonisjs-account-kit@https://codeload.github.com/Kevinjohn/oss-adonisjs-account-kit/tar.gz/9d175891d1a9a303c712ab3e2dbd07e9cc154419': true

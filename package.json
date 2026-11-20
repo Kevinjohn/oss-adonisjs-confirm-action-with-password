@@ -92,7 +92,7 @@
     "@japa/assert": "^4.2.0",
     "@japa/expect-type": "^2.0.4",
     "@japa/runner": "^5.3.0",
-    "@kevinjohn/adonisjs-account-kit": "https://github.com/Kevinjohn/oss-adonisjs-account-kit/releases/download/v0.4.1/kevinjohn-adonisjs-account-kit-0.4.1.tgz",
+    "@kevinjohn/adonisjs-account-kit": "github:Kevinjohn/oss-adonisjs-account-kit#9d175891d1a9a303c712ab3e2dbd07e9cc154419",
     "@poppinss/ts-exec": "^1.5.1",
     "@types/luxon": "^3.0.0",
     "@types/node": "^24.0.0",

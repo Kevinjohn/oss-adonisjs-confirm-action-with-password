@@ -9,7 +9,6 @@
 
 import { readFile } from 'node:fs/promises'
 import { test } from '@japa/runner'
-import { readCredentialRevision } from '../src/credential_revision.js'
 import type { Fixture } from './helpers.js'
 import { bootFixture } from './helpers.js'
 
@@ -18,7 +17,7 @@ import { bootFixture } from './helpers.js'
  * Kit upgrade, confirmations may no longer bind to sign-ins or credentials: do not ship the upgrade.
  */
 const KIT_READS = {
-  users: ['id', 'password', 'credentials_changed_at'],
+  users: ['id', 'password'],
   account_sessions: ['id', 'user_id', 'handle_hash'],
 }
 const SUPPORTED_KIT = '0.4.1'
@@ -82,8 +81,8 @@ test.group('Account Kit coupling canary', (group) => {
     await fixture.createUser(email, 'pw-one-Original-7')
     const input = await fixture.login(email, 'pw-one-Original-7')
     const read = () =>
-      fixture.kit.authentication.withCurrent(current, ({ trx, account }) =>
-        readCredentialRevision(trx, 'users', account.id)
+      fixture.kit.authentication.withCurrent(current, ({ readCredentialRevision }) =>
+        readCredentialRevision()
       )
     let current = input
     assert.isNull(await read(), 'KIT COUPLING: a fresh account must have no credential revision')
@@ -98,7 +97,7 @@ test.group('Account Kit coupling canary', (group) => {
     assert.equal(
       await read(),
       revision,
-      'KIT COUPLING: users.credentials_changed_at no longer matches the revision Account Kit returns and checks'
+      'KIT COUPLING: the live credential revision no longer matches the revision Account Kit returns and checks'
     )
   })
 })

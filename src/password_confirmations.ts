@@ -13,7 +13,6 @@ import { errors as limiterErrors } from '@adonisjs/limiter'
 import type { Limiter, LimiterManager } from '@adonisjs/limiter'
 import type { AccountKit } from '@kevinjohn/adonisjs-account-kit'
 import type { CurrentAccountInput, Trx, UserId } from '@kevinjohn/adonisjs-account-kit/types'
-import { readCredentialRevision } from './credential_revision.js'
 import { buildConfirmationBinding } from './intent_hash.js'
 import {
   PasswordConfirmationDeniedException,
@@ -249,11 +248,7 @@ export class PasswordConfirmations {
       const expiresAt = verifiedAt + this.#config.windowMs
       // Same input, so withCurrent has re-checked this sign-in and its credential revision.
       if (issuedAt >= expiresAt) throw new PasswordConfirmationStaleException()
-      const revision = await readCredentialRevision(
-        context.trx,
-        this.#config.usersTable,
-        context.account.id
-      )
+      const revision = await context.readCredentialRevision()
       await context.trx
         .from(this.#config.table)
         .where('sign_in_id', signInId)
@@ -293,11 +288,7 @@ export class PasswordConfirmations {
       throw new PasswordConfirmationRequiredException()
     }
     const now = this.#readNow()
-    const revision = await readCredentialRevision(
-      context.trx,
-      this.#config.usersTable,
-      context.account.id
-    )
+    const revision = await context.readCredentialRevision()
     const query = context.trx
       .from(this.#config.table)
       .where({

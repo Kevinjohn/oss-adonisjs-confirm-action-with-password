@@ -7,14 +7,10 @@
  * file that was distributed with this source code.
  */
 
-import type { Trx, UserId, CurrentAccount } from '@kevinjohn/adonisjs-account-kit/types'
+import type { CurrentAccountContext, Trx, UserId } from '@kevinjohn/adonisjs-account-kit/types'
 
-/** What `authentication.withCurrent` hands its callback in Account Kit 0.4.1. Never construct one. */
-export interface KitContext {
-  account: CurrentAccount
-  signInId?: number
-  trx: Trx
-}
+/** The context Account Kit provides to an active `authentication.withCurrent` callback. */
+export type KitContext = CurrentAccountContext
 
 /** The operation a confirmation authorizes: what, where, and the exact request contents. */
 export interface ConfirmationRequest {
