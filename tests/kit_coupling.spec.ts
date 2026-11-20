@@ -20,7 +20,7 @@ const KIT_READS = {
   users: ['id', 'password'],
   account_sessions: ['id', 'user_id', 'handle_hash'],
 }
-const SUPPORTED_KIT = '0.4.1'
+const SUPPORTED_KIT = '0.4.2'
 
 let fixture: Fixture
 
@@ -56,7 +56,7 @@ test.group('Account Kit coupling canary', (group) => {
         assert.include(
           present,
           column,
-          `KIT COUPLING: Account Kit no longer has ${table}.${column}; password confirmations would stop ${column === 'password' ? 'verifying passwords' : table === 'users' ? 'binding to credential revisions' : 'binding to sign-ins'}.`
+          `KIT COUPLING: Account Kit no longer has ${table}.${column}; password confirmations would stop ${column === 'password' ? 'verifying passwords' : table === 'users' ? 'finding the account’s password hash' : 'binding to sign-ins'}.`
         )
       }
     }

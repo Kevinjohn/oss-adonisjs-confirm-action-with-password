@@ -16,7 +16,7 @@ authorizes.
 | Need          | Detail                                                                                                                               |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Node.js       | 24 or later                                                                                                                          |
-| Account Kit   | the pinned Account Kit build with `withCurrent` live revision support (see below)                                                    |
+| Account Kit   | exactly `0.4.2` for the live credential revision API (see below)                                                                     |
 | Login         | Account Kit `authentication.strategy: 'session'` with `sessionManagement` enabled; access tokens give no sign-in row and are refused |
 | Session store | server-side (memory in tests, database or Redis); the cookie store keeps a copied session alive after logout                         |
 | Limiter store | shared (database or Redis) when the app runs more than one process; the memory store counts per process                              |
@@ -269,7 +269,7 @@ confirm again, and the orphan expires on its own. Every other error rolled back.
 
 ## What ends a confirmation
 
-Every Account Kit 0.4.1 path below is tested to kill an outstanding confirmation, and a spend already in
+Every Account Kit 0.4.2 path below is tested to kill an outstanding confirmation, and a spend already in
 progress commits before the revocation acquires its connection in the single-connection SQLite fixture:
 password change (keeping or ending this sign-in), password reset, logout, `sessions.revoke`,
 `revokeOthers`, `revokeAll`, `changeRestriction`, a completed email change, account deletion,
