@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.2.2 - 2026-11-21
+
+- Read the live credential revision through Account Kit's callback context inside the existing
+  authenticated transaction, instead of querying the Kit's `credentials_changed_at` column directly.
+- Require Account Kit 0.4.2.
+
 ## 0.2.1 - 2026-11-19
 
 - Accept Account Kit credential objects with a getter-backed revision. Confirmation revocation
