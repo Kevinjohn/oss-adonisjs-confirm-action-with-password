@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+## 0.3.0 - 2026-11-21
+
+- Require Account Kit 0.5.0.
+- Document and verify the package user stories and implementation flows.
+
 - Use the primary Lucid connection's migration directory during configure, refuse ambiguous paths,
   and report non-missing inspection errors without overwriting existing files.
 - Export `PasswordConfirmationsDependencies` from `./types` as well as the existing root import.
