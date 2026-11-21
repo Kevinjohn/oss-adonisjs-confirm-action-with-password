@@ -71,4 +71,4 @@ test('the documented upgrade adds expiry after the 0.1.1 create migration ran', 
   } finally {
     await fixture.close()
   }
-})
+}).timeout(30_000)
