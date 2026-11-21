@@ -31,7 +31,7 @@ async function signInTestUser() {
   return { email, input: await fixture.login(email, PW) }
 }
 
-test.group('PasswordConfirmations lifecycle on Account Kit 0.4.1', (group) => {
+test.group('PasswordConfirmations lifecycle on Account Kit 0.4.2', (group) => {
   group.setup(async () => {
     fixture = await bootFixture()
     return () => fixture.close()

@@ -16,7 +16,7 @@ authorizes.
 | Need          | Detail                                                                                                                               |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Node.js       | 24 or later                                                                                                                          |
-| Account Kit   | exactly `0.4.1`; the package reads three Kit storage details (see below)                                                             |
+| Account Kit   | exactly `0.4.2` for the live credential revision API (see below)                                                                     |
 | Login         | Account Kit `authentication.strategy: 'session'` with `sessionManagement` enabled; access tokens give no sign-in row and are refused |
 | Session store | server-side (memory in tests, database or Redis); the cookie store keeps a copied session alive after logout                         |
 | Limiter store | shared (database or Redis) when the app runs more than one process; the memory store counts per process                              |
@@ -236,15 +236,15 @@ yourself is not checked against the sign-in or the account lock, and the guarant
 
 ## Account Kit storage this package reads
 
-Account Kit 0.4.1 has no public API for these, so the package reads them directly. That is why it
-pins the Kit exactly. `tests/kit_coupling.spec.ts` fails with `KIT COUPLING:` if any of them
+Issue and spend use Account Kit’s `withCurrent` context to read the live credential revision in
+their transaction. The package pins Kit exactly because it still depends on the password hash
+column and the sign-in table below. `tests/kit_coupling.spec.ts` fails with `KIT COUPLING:` if any of them
 changes.
 
-| Read                           | Why                                                                                                 | If it is missing or changes                                                    |
-| ------------------------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `users.credentials_changed_at` | the live credential revision                                                                        | the query throws: nothing is issued or spent                                   |
-| `users.password`               | the hash to verify, outside the Kit lock (the Kit's own `verifyPassword` only runs inside its lock) | the query throws, or a non-string value is a wrong password: nothing is issued |
-| `account_sessions.id`          | foreign key with `ON DELETE CASCADE`                                                                | the migration fails: confirmations cannot be stored                            |
+| Read                  | Why                                                                                                 | If it is missing or changes                                                    |
+| --------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `users.password`      | the hash to verify, outside the Kit lock (the Kit's own `verifyPassword` only runs inside its lock) | the query throws, or a non-string value is a wrong password: nothing is issued |
+| `account_sessions.id` | foreign key with `ON DELETE CASCADE`                                                                | the migration fails: confirmations cannot be stored                            |
 
 ## Errors
 
@@ -269,7 +269,7 @@ confirm again, and the orphan expires on its own. Every other error rolled back.
 
 ## What ends a confirmation
 
-Every Account Kit 0.4.1 path below is tested to kill an outstanding confirmation, and a spend already in
+Every Account Kit 0.4.2 path below is tested to kill an outstanding confirmation, and a spend already in
 progress commits before the revocation acquires its connection in the single-connection SQLite fixture:
 password change (keeping or ending this sign-in), password reset, logout, `sessions.revoke`,
 `revokeOthers`, `revokeAll`, `changeRestriction`, a completed email change, account deletion,
