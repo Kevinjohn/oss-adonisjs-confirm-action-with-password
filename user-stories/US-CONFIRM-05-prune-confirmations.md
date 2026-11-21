@@ -33,4 +33,4 @@ flowchart TD
     C --> D["Return affected row count"]
 ```
 
-**Code references:** [prune method](../src/password_confirmations.ts#L276), [window configuration](../src/types.ts#L55)
+**Code references:** [prune method](../src/password_confirmations.ts), [window configuration](../src/types.ts)

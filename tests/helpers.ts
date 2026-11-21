@@ -54,7 +54,7 @@ export default class extends BaseSchema {
       table.increments('id')
       table.integer('tokenable_id').notNullable()
     })
-    // Stand-in for the product write a confirmation authorizes.
+    // Stand-in for the protected product write.
     this.schema.createTable('effects', (table) => {
       table.increments('id')
       table.string('label').notNullable()
@@ -132,8 +132,8 @@ export default class extends BaseSchema {
   return { root, ignitor, importFixtureModule }
 }
 
-/** The error code a call rejects with, or 'resolved'. */
-export const readCallOutcome = (promise: Promise<unknown>) =>
+/** 'resolved', the rejection's error code, or its string representation. */
+export const readCallResult = (promise: Promise<unknown>) =>
   promise.then(
     () => 'resolved',
     (error) => (error.code as string) ?? String(error)

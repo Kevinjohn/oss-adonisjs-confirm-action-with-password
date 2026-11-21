@@ -10,7 +10,7 @@
 import { test } from '@japa/runner'
 import type { CurrentAccountInput } from '@kevinjohn/adonisjs-account-kit/types'
 import type { Fixture } from './helpers.js'
-import { bootFixture, readCallOutcome, makeSessionGuard } from './helpers.js'
+import { bootFixture, readCallResult, makeSessionGuard } from './helpers.js'
 
 const PW = 'pw-one-Original-7'
 const PW2 = 'Correct-Horse-9-battery'
@@ -144,7 +144,7 @@ test.group('Revocation: every Account Kit path kills outstanding confirmations',
             await trx.table('effects').insert({ label: `${name}: must not happen` })
           }
         )
-        assert.include(DEAD, await readCallOutcome(spent))
+        assert.include(DEAD, await readCallResult(spent))
       }
       const effects = await fixture.db.from('effects').where('label', `${name}: must not happen`)
       assert.lengthOf(effects, 0)
@@ -187,7 +187,7 @@ test.group('Revocation: every Account Kit path kills outstanding confirmations',
         client.acquireConnection = acquire
       })
       await Promise.race([inside.promise, spend])
-      // Observe the actual connection request, including nontransactional paths such as logout.
+      // Observe the actual connection request, including nontransactional paths such as sign-out.
       client.acquireConnection = async function () {
         const pending = acquire.call(this)
         requested.resolve()
@@ -214,7 +214,7 @@ test.group('Revocation: every Account Kit path kills outstanding confirmations',
       for (const input of afterwards) {
         assert.include(
           DEAD,
-          await readCallOutcome(
+          await readCallResult(
             confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {})
           )
         )

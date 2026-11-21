@@ -35,7 +35,12 @@ test('README links resolve from the packed archive or name this release', async 
       `${target} is not in the archive; link the tagged repository file instead`
     )
   }
-  const tagged = [...readme.matchAll(/\/blob\/([^/\s]+)\//g)].map(([, tag]) => tag)
+  // The user-story catalogue belongs to this package; external recipes may pin their own revision.
+  const tagged = [
+    ...readme.matchAll(
+      /github\.com\/Kevinjohn\/oss-adonisjs-confirm-action-with-password\/blob\/([^/\s]+)\//g
+    ),
+  ].map(([, tag]) => tag)
   assert.isAbove(tagged.length, 0)
   for (const tag of tagged) assert.equal(tag, `v${manifest.version}`)
 })

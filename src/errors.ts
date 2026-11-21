@@ -40,7 +40,7 @@ export class PasswordConfirmationStaleException extends Exception {
   static message = 'Confirm this action again.'
 }
 
-/** Host policy (`authorize`) refused the action. */
+/** The host authorisation callback (`authorize`) refused the operation. */
 export class PasswordConfirmationForbiddenException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_FORBIDDEN'
   static status = 403

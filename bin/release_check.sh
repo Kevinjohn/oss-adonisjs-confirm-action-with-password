@@ -17,31 +17,14 @@ pnpm build
 rm -rf tmp/release && mkdir -p tmp/release
 pnpm pack --pack-destination tmp/release >/dev/null
 TARBALL=$(ls tmp/release/*.tgz)
-# Load the packed layout, not the source: unpacked under tmp/release/node_modules, Node resolves
-# the peers from the repository's own install. ./services/main needs a booted app and is left out.
-# tmp/release/package.json stops the name resolving to the repository itself by self-reference.
-PKG=tmp/release/node_modules/@kevinjohn/adonisjs-confirm-action-with-password
-mkdir -p "$(dirname "$PKG")" && tar -xzf "$TARBALL" -C tmp/release && mv tmp/release/package "$PKG"
-echo '{"private":true}' > tmp/release/package.json
-(cd tmp/release && node --input-type=module -e "
-  import { access } from 'node:fs/promises'
-  import { join } from 'node:path'
-  import { fileURLToPath } from 'node:url'
-  const name = '@kevinjohn/adonisjs-confirm-action-with-password'
-  const entry = fileURLToPath(import.meta.resolve(name))
-  if (!entry.startsWith(join(process.cwd(), 'node_modules') + '/'))
-    throw new Error(name + ' resolved outside the packed copy: ' + entry)
-  const main = await import(name)
-  await import(name + '/types')
-  await import(name + '/password_confirmations_provider')
-  for (const key of ['configure', 'defineConfig', 'PasswordConfirmations', 'errors', 'stubsRoot'])
-    if (!(key in main)) throw new Error('packed entry is missing ' + key)
-  for (const stub of ['config/password_confirmations.stub', 'migrations/create_password_confirmations_table.stub'])
-    await access(join(main.stubsRoot, stub))
-  console.log('packed layout ok')
-")
 if ! DIGEST=$(shasum -a 256 "$TARBALL" | cut -d' ' -f1) || [[ ! "$DIGEST" =~ ^[[:xdigit:]]{64}$ ]]; then
   echo "Could not calculate a valid SHA-256 digest for $TARBALL" >&2
+  exit 1
+fi
+# Install and exercise this exact archive in independent hosts; publication uses the same file.
+node bin/test_packed_consumer.mjs "$TARBALL"
+if [[ "$(shasum -a 256 "$TARBALL" | cut -d' ' -f1)" != "$DIGEST" ]]; then
+  echo "The checked archive changed during consumer validation" >&2
   exit 1
 fi
 GITHUB_REPOSITORY_PATH=${GITHUB_REPOSITORY:-$(git remote get-url origin | sed -E 's#.*github.com[:/]##; s#\.git$##')}

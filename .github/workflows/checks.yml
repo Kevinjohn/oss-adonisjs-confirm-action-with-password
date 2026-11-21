@@ -29,3 +29,8 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - name: Check the packed package in isolated consumers
+        run: |
+          mkdir -p tmp/consumer-check
+          pnpm pack --pack-destination tmp/consumer-check
+          node bin/test_packed_consumer.mjs tmp/consumer-check/*.tgz
