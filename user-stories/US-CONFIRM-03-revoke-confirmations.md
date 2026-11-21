@@ -36,12 +36,12 @@ Scope: package service path; HTTP request validation, origin checks and response
 ```mermaid
 flowchart TD
     A["Account Kit lifecycle operation"] --> B["Kit invalidates session or advances credential state"]
-    B --> C{"withConfirmation calls withCurrent; live sign-in accepted?"}
+    B --> C{"Next withConfirmation calls withCurrent; live current input accepted?"}
     C -->|No| G["Refuse invalid or revoked sign-in before consume"]
-    C -->|Yes| H["consume compares live credential revision and stored binding"]
+    C -->|Yes| H["After consume guards, conditionally update eligible row using live revision and binding"]
     H --> D{"Stored binding still matches?"}
     D -->|No| E["No matching row update; required error"]
-    D -->|Yes| F["Confirmation can be consumed"]
+    D -->|Yes| F["Only an eligible matching row can be consumed"]
 ```
 
 **Code references:** [Spend check](../src/password_confirmations.ts), [revocation contract](../README.md#what-ends-a-confirmation), [revocation spec](../tests/revocation.spec.ts)

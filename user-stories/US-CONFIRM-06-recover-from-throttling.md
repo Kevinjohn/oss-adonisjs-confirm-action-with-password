@@ -19,16 +19,32 @@ As a signed-in account holder, I want to know when I can try my password again s
 
 ```mermaid
 flowchart TD
-    A["Submit password"] --> B["Wait on a 429 response"]
-    B --> C["Retry after the indicated interval"]
+    A["Submit password"] --> B{"Host response?"}
+    B -->|429| C["Wait for the indicated retry interval"]
+    C --> A
+    B -->|Wrong password| D["Correct password and retry"]
+    D --> A
+    B -->|Accepted| E["Receive confirmation"]
+    B -->|Other refusal or error| F["Follow host recovery guidance"]
 ```
 
 ## Code flow
 
+Scope: package limiter-enabled path after the first `withCurrent` stage; host response handling is a separate boundary.
+
 ```mermaid
 flowchart TD
-    A["Check block and reserve attempt"] --> B["Return throttled exception on exhausted budget"]
-    B --> C["Host forwards retryAfterSeconds"]
+    A["confirmPassword: build account throttle keys"] --> B{"reserveAttempt: active block or exhausted budget?"}
+    B -->|Yes| C["Throw PasswordConfirmationThrottledException"]
+    C --> D["Host sets Retry-After from retryAfterSeconds; normal handler negotiates response"]
+    B -->|No, reserved| E{"Password verification outcome?"}
+    E -->|Wrong| F{"recordPasswordFailure reaches requests?"}
+    F -->|Yes| G["Set block key; delete attempt and failure counts"]
+    G --> H["Throw PasswordConfirmationDeniedException"]
+    F -->|No| H
+    E -->|Throws| I["Refund attempt; rethrow, or AggregateError if refund fails"]
+    E -->|Correct| J["Record verifiedAt; reset attempt and failure counts"]
+    J --> K["Continue stage 2 issuance checks"]
 ```
 
 **Code references:** [Implementation](../src/password_confirmations.ts), [regression evidence](../tests/throttle.spec.ts).

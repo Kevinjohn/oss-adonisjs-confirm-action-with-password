@@ -6,7 +6,7 @@ As a host operator, I want to upgrade an already migrated 0.1.1 table so that th
 **Access:** An existing host has already applied the 0.1.1 create migration.
 **Entry:** Run a new host migration before deploying the service that reads expires_at.
 **Documentation:** [Package guide](../README.md)
-**Source:** [Implementation](../CHANGELOG.md)
+**Source:** [Host migration example](../CHANGELOG.md#upgrade-the-confirmations-table-from-011)
 **Coverage:** [Regression evidence](../tests/schema_upgrade.spec.ts)
 
 ## Acceptance criteria
@@ -18,16 +18,21 @@ As a host operator, I want to upgrade an already migrated 0.1.1 table so that th
 
 ```mermaid
 flowchart TD
-    A["Prepare the host upgrade migration"] --> B["Apply it before deploying"]
-    B --> C["Require fresh proof"]
+    A["Prepare the later host upgrade migration"] --> B{"Apply before deploying: migration succeeds?"}
+    B -->|No| D["Correct host migration before deploying"]
+    D --> A
+    B -->|Yes| C["Deploy service; require fresh proof"]
 ```
 
 ## Code flow
 
+Scope: changelog's host migration example, not a package command.
+
 ```mermaid
 flowchart TD
-    A["Lucid runs the later migration"] --> B["Clear earlier confirmations"]
-    B --> C["Persist indexed expires_at"]
+    A{"Lucid migration direction?"} -->|up| B["Delete existing confirmation rows"]
+    B --> C["Add non-null expires_at default 0 and its index"]
+    A -->|down| D["Drop index and expires_at column; deleted rows not restored"]
 ```
 
 **Code references:** [Implementation](../CHANGELOG.md), [regression evidence](../tests/schema_upgrade.spec.ts).

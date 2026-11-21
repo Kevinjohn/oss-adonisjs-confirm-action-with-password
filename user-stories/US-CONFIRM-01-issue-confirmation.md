@@ -12,7 +12,7 @@ As a signed-in account holder, I want to confirm my password for a named sensiti
 ## Acceptance criteria
 
 - The host supplies the operation name (`action`) and resource key (`scope`) as strings of 1–255 characters, a required intent made only of plain JSON values (finite numbers and safe integers; hashed inside an `{action, scope, intent}` wrapper, so it may nest at most 31 container levels around a value, and a value at depth 33 or deeper is refused), and the password string. These are API inputs, not package-rendered form fields.
-- The host authorisation callback `authorize` runs before password verification and again before issue; anything other than literal `true` refuses. The proof is bound to the operation, not a permission grant.
+- The host authorisation callback `authorize` runs before password verification and again before issue; anything other than literal `true` refuses. It receives the Kit context and only `{ action, scope, intent }`, never the password. The proof is bound to the operation, not a permission grant; keep the intent unchanged after the call starts.
 - A correct password returns `confirmationId` and `expiresAt`; malformed/wrong password, stale verification, missing sign-in registry, refusal or exhausted throttle returns an error and issues nothing.
 - Default failed-attempt budget is 5 per account per minute, then a 20-minute block; `throttle: false` requires host throttling reserved before hash verification.
 
@@ -24,7 +24,7 @@ As a signed-in account holder, I want to confirm my password for a named sensiti
 ```mermaid
 flowchart TD
     A["Host receives a password-confirmation request for an operation"] --> B["Host validates account-holder input"]
-    B --> C{"Host origin check passes?"}
+    B --> C{"Input and host origin check pass?"}
     C -->|No| D["Host rejects request; no service call"]
     C -->|Yes| E["Host calls confirmPassword"]
     E --> F{"Password and authorisation accepted?"}
@@ -38,19 +38,25 @@ Scope: package service path; HTTP request validation, origin checks and response
 
 ```mermaid
 flowchart TD
-    A["confirmPassword(input, request)"] --> B["buildConfirmationBinding(request)"]
-    B --> C["withCurrent stage 1; authorize; read hash"]
-    C --> T{"Package throttle on?"}
+    A["confirmPassword(input, request); snapshotCurrentAccount"] --> B{"buildConfirmationBinding accepts request?"}
+    B -->|No| X["Binding or account/permission failure; no proof"]
+    B -->|Yes| C{"withCurrent stage 1 accepts current account, registered sign-in and authorize?"}
+    C -->|No| X
+    C -->|Yes| S["Read password hash if account has password"]
+    S --> T{"Package throttle on?"}
     T -->|"No (throttle: false; host throttles in its own route)"| E["verify hash outside Kit transaction"]
-    T -->|Yes| D{"Attempt reserved?"}
-    D -->|No| D2["PasswordConfirmationThrottledException (429); no hash run, no row issued"]
+    T -->|Yes| D{"reserveAttempt: block and budget allow?"}
+    D -->|No| D2["Throttle refusal (429) or limiter fault; no hash run, no row issued"]
     D -->|Yes| E
-    E --> F{"Correct password?"}
-    F -->|No| G["PasswordConfirmationDeniedException; block armed when budget spent; no row issued"]
-    F -->|Yes| H["withCurrent stage 2; reauthorize and recheck sign-in/revision"]
-    H --> I{"Window still open?"}
+    E --> F{"Verification outcome?"}
+    F -->|Wrong, non-string or no hash| G["Record completed failure if throttled; deny; no row"]
+    F -->|Verifier throws| V["Refund reservation if throttled; rethrow (AggregateError if refund fails)"]
+    F -->|Correct| W["Read verifiedAt; reset attempt and failure counts if throttled"]
+    W --> H{"withCurrent stage 2 accepts same account, current sign-in and authorize?"}
+    H -->|No| X
+    H -->|Yes| I{"issuedAt before verifiedAt + windowMs?"}
     I -->|No| J["PasswordConfirmationStaleException; no row issued"]
-    I -->|Yes| K["delete this sign-in's spent/expired rows, insert confirmation row, return id/expiry"]
+    I -->|Yes| K["Read live revision; delete this sign-in's spent/expired rows; insert and return id/expiry"]
 ```
 
 **Code references:** [Entry/service and attempt reservation](../src/password_confirmations.ts), [request binding](../src/intent_hash.ts), [return and config types](../src/types.ts)

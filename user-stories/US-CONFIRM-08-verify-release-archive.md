@@ -19,16 +19,37 @@ As a package maintainer, I want to exercise the exact release archive in install
 
 ```mermaid
 flowchart TD
-    A["Dispatch from main"] --> B["Inspect a failed gate or wait for validation"]
-    B --> C["Obtain checked archive and digest"]
+    A["Dispatch release workflow or run local gate"] --> B{"Validation succeeds?"}
+    B -->|No| C["Inspect failure; correct candidate before retrying"]
+    C --> A
+    B -->|Yes| D{"Workflow or local gate?"}
+    D -->|Workflow| E["Receive published prerelease or inspect publication failure"]
+    D -->|Local| F["Obtain checked archive and notes with digest; no release"]
 ```
 
 ## Code flow
 
+Scope: release workflow and common local package gate.
+
 ```mermaid
 flowchart TD
-    A["Validate tag and changelog"] --> B["Pack and run both isolated consumers"]
-    B --> C["Compare archive digest before release"]
+    A["Workflow dispatch"] --> B{"checks job succeeds and package job on main?"}
+    B -->|No| X["Stop; no publication"]
+    B -->|Yes| C{"release_check.sh: tag and changelog valid?"}
+    L["Local bash bin/release_check.sh"] --> C
+    C -->|No| X
+    C -->|Yes| P{"Build, pack candidate and calculate valid SHA-256 succeed?"}
+    P -->|No| X
+    P -->|Yes| G{"Both installed consumer runs succeed?"}
+    G -->|No| X
+    G -->|Yes| H{"Archive digest unchanged?"}
+    H -->|No| X
+    H -->|Yes| N["Generate release notes and install URL with digest"]
+    N --> T{"Running within workflow?"}
+    T -->|No| O["Local files ready; no publication"]
+    T -->|Yes| U{"Upload release artifact; release job downloads successfully?"}
+    U -->|No| X
+    U -->|Yes| R["gh release create as prerelease at workflow commit"]
 ```
 
 **Code references:** [Implementation](../bin/release_check.sh), [regression evidence](../tests/tooling/release_check.spec.ts).
