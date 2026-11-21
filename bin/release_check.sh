@@ -23,7 +23,7 @@ if ! DIGEST=$(shasum -a 256 "$TARBALL" | cut -d' ' -f1) || [[ ! "$DIGEST" =~ ^[[
 fi
 # Install and exercise this exact archive in independent hosts; publication uses the same file.
 node bin/test_packed_consumer.mjs "$TARBALL"
-if [[ "$(shasum -a 256 "$TARBALL" | cut -d' ' -f1)" != "$DIGEST" ]]; then
+if ! CHECKED_DIGEST=$(shasum -a 256 "$TARBALL" | cut -d' ' -f1) || [[ "$CHECKED_DIGEST" != "$DIGEST" ]]; then
   echo "The checked archive changed during consumer validation" >&2
   exit 1
 fi

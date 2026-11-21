@@ -13,6 +13,7 @@ for (const digestCase of [
   'malformed',
   'consumer-fails',
   'changed',
+  'recheck-fails',
   'valid',
 ]) {
   test(`the release gate handles a ${digestCase} archive validation result`, async ({
@@ -55,6 +56,7 @@ for (const digestCase of [
         'malformed': "printf 'not-a-digest  fixture.tgz\\n'",
         'consumer-fails': `printf '${digest}  fixture.tgz\\n'`,
         'changed': `if [[ -f tmp/release/changed ]]; then printf '${'b'.repeat(64)}  fixture.tgz\\n'; else printf '${digest}  fixture.tgz\\n'; fi`,
+        'recheck-fails': `printf '${digest}  fixture.tgz\\n'\nif [[ -f tmp/release/changed ]]; then exit 2; fi`,
         'valid': `printf '${digest}  fixture.tgz\\n'`,
       }[digestCase]
       await writeFile(join(bin, 'shasum'), `#!/bin/bash\n${result}\n`, { mode: 0o755 })
@@ -95,7 +97,7 @@ import { access, writeFile } from 'node:fs/promises'
 assert.equal(process.argv[2], 'tmp/release/fixture.tgz')
 await access(process.argv[2])
 console.log('consumer checked fixture archive')
-${digestCase === 'changed' ? "await writeFile('tmp/release/changed', '')" : ''}
+${['changed', 'recheck-fails'].includes(digestCase) ? "await writeFile('tmp/release/changed', '')" : ''}
 process.exit(${digestCase === 'consumer-fails' ? 42 : 0})
 `
     )
@@ -118,7 +120,7 @@ process.exit(${digestCase === 'consumer-fails' ? 42 : 0})
       assert.include(result.stdout, 'consumer checked fixture archive')
       assert.equal(await readFile(output, 'utf8'), '')
       await assert.rejects(() => access(notes), /ENOENT/)
-    } else if (digestCase === 'changed') {
+    } else if (digestCase === 'changed' || digestCase === 'recheck-fails') {
       assert.equal(result.status, 1, result.stderr)
       assert.include(result.stderr, 'The checked archive changed during consumer validation')
       assert.equal(await readFile(output, 'utf8'), '')
