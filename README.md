@@ -25,7 +25,7 @@ authorizes.
 ## Install
 
 ```sh
-pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.2.1/kevinjohn-adonisjs-confirm-action-with-password-0.2.1.tgz
+pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.2.2/kevinjohn-adonisjs-confirm-action-with-password-0.2.2.tgz
 node ace configure @kevinjohn/adonisjs-confirm-action-with-password   # --users-table, --user-id-type as for Account Kit
 node ace migration:run
 ```
@@ -53,7 +53,7 @@ disagrees with them. After an interrupted or changed setup, check three things:
 
 ## User stories
 
-See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.2.1/user-stories/README.md) for the source-reviewed capabilities and boundaries.
+See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.2.2/user-stories/README.md) for the source-reviewed capabilities and boundaries.
 
 ## Use
 
