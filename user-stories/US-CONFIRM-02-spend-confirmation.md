@@ -15,6 +15,8 @@ As a signed-in account holder, I want the application to spend my confirmation w
 - A matching live confirmation is marked consumed before `run`; the mark and host change share the Kit transaction.
 - A missing, expired, consumed, mismatched or revoked confirmation is rejected; rollback of `run` also rolls back the spend. A request that fails binding (invalid `action`, `scope` or `intent`, 400), has no registered sign-in, or fails host authorisation is refused before any row is updated.
 
+- Both deadlines apply strictly. A larger configured window cannot extend the issued deadline and a shorter one applies immediately. Equality with either deadline refuses the spend. One conditional update must affect exactly one row, so competing callers cannot commit the same proof twice. `withConfirmation` returns the callback result and `consume` resolves without a value. The callback must write through `context.trx` for its changes to roll back with the spend.
+
 ## User flow
 
 ```mermaid

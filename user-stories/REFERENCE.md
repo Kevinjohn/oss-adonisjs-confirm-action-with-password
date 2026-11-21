@@ -26,3 +26,9 @@ Status records source availability, not test execution. `Current` means the API 
 - **Planned:** an agreed target without an ordinary implemented journey.
 
 See the portable [story template](TEMPLATE.md) for the complete writing and diagram maintenance rules.
+
+## Operational evidence
+
+- HTTP error negotiation and account-wide throttling are exercised by [throttle tests](../tests/throttle.spec.ts) and [shared-store host tests](../tests/host_compatibility.spec.ts).
+- A previously applied migration is exercised by the [schema upgrade fixture](../tests/schema_upgrade.spec.ts).
+- The [release gate](../bin/release_check.sh) runs the [installed host](../examples/packed-consumer/host.ts) through the [consumer harness](../bin/test_packed_consumer.mjs).

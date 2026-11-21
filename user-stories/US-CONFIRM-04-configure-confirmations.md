@@ -35,6 +35,8 @@ As an application operator, I want to install the provider and storage so that c
 - Throttling needs `@adonisjs/limiter` registered unless `throttle` is `false`; otherwise constructing the service fails with `InvalidPasswordConfirmationsConfigException`. The provider also refuses a config object without `windowMs`.
 - The provider binds the package service to Account Kit, Lucid and application hash/limiter dependencies. HTTP routes, origin checks and response mapping remain host-owned.
 
+- A host using string user IDs can add its own foreign key and cascade policy for resource scope. The host compatibility fixture checks isolation across scopes and continued spending on the surviving scope. The package leaves resource ownership and authorisation to the host. [Host compatibility](../tests/host_compatibility.spec.ts)
+
 ## User flow
 
 ```mermaid

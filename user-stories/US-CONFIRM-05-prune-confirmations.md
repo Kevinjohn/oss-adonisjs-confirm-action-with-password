@@ -14,6 +14,8 @@ As an application operator, I want to remove spent and expired confirmations so 
 - `prune()` deletes rows whose stored `expires_at` deadline has passed, plus rows with a non-null `consumed_at`. The deadline is fixed at issue, so the window configured for the pruning process does not change which rows are expired.
 - The method returns the number of deleted rows. The host chooses and schedules a cadence appropriate to its storage and operations.
 
+- Equality with the stored deadline qualifies for deletion. Running the operation again returns zero if there are no further qualifying rows. Issuance also cleans spent or expired rows for that sign-in only.
+
 ## User flow
 
 ```mermaid

@@ -16,6 +16,9 @@ As a signed-in account holder, I want to confirm my password for a named sensiti
 - A correct password returns `confirmationId` and `expiresAt`; malformed/wrong password, stale verification, missing sign-in registry, refusal or exhausted throttle returns an error and issues nothing.
 - Default failed-attempt budget is 5 per account per minute, then a 20-minute block; `throttle: false` requires host throttling reserved before hash verification.
 
+- The service snapshots the current account input before either Kit transaction. A passwordless account, missing hash or non-string password follows the wrong-password path. The verifier runs outside the transaction. A successful check starts the window before limiter cleanup, then the service reacquires the same account, checks permission again and persists the deadline. The returned `expiresAt` is epoch milliseconds.
+- Only the JSON projection contributes to the intent hash. Object keys sort by UTF-16 code units and array order matters. Unsupported values, sparse arrays, unsafe integers and nesting beyond depth 32 are refused. Negative zero hashes as zero. Use strings for identifiers outside the safe integer range. [Binding rules and edge cases](../tests/intent_hash.spec.ts)
+
 ## User flow
 
 ```mermaid
@@ -35,7 +38,7 @@ Scope: package service path; HTTP request validation, origin checks and response
 
 ```mermaid
 flowchart TD
-    A["confirmPassword(input, request)"] --> B["bindRequest(action, scope, intent)"]
+    A["confirmPassword(input, request)"] --> B["buildConfirmationBinding(request)"]
     B --> C["withCurrent stage 1; authorize; read hash"]
     C --> T{"Package throttle on?"}
     T -->|"No (throttle: false; host throttles in its own route)"| E["verify hash outside Kit transaction"]
