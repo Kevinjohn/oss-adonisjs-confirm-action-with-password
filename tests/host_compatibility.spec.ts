@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
 import { test } from '@japa/runner'
 import type { Fixture } from './helpers.js'
-import { bootFixture, readCallOutcome } from './helpers.js'
+import { bootFixture, readCallResult } from './helpers.js'
 
 const PW = 'pw-one-Original-7'
 const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
@@ -109,7 +109,7 @@ test.group('host database compatibility', (group) => {
         /Too many attempts/
       )
     }
-    // Both accounts use the same login client key. A different account retains its own budget.
+    // Both accounts use the same sign-in client key. A different account retains its own budget.
     const otherKeys = buildThrottleKeys(other.input.userId)
     await assert.rejects(
       () => confirmations.confirmPassword(other.input, { ...request, password: 'wrong' }),
@@ -141,13 +141,13 @@ test.group('host database compatibility', (group) => {
       const incorrect = { ...request, password: 'wrong' }
       for (let attempt = 0; attempt < 4; attempt++) {
         assert.equal(
-          await readCallOutcome(first.confirmPassword(input, incorrect)),
+          await readCallResult(first.confirmPassword(input, incorrect)),
           'E_PASSWORD_CONFIRMATION_DENIED'
         )
       }
       // Await the failure that arms the block before either app reads the shared limiter again.
       assert.equal(
-        await readCallOutcome(second.confirmPassword(peerInput, incorrect)),
+        await readCallResult(second.confirmPassword(peerInput, incorrect)),
         'E_PASSWORD_CONFIRMATION_DENIED'
       )
       const correct = { ...request, password: PW }
@@ -156,7 +156,7 @@ test.group('host database compatibility', (group) => {
         [second, peerInput],
       ] as const) {
         assert.equal(
-          await readCallOutcome(service.confirmPassword(signIn, correct)),
+          await readCallResult(service.confirmPassword(signIn, correct)),
           'E_PASSWORD_CONFIRMATION_THROTTLED'
         )
         const { confirmationId } = await service.confirmPassword(other.input, correct)
@@ -179,7 +179,7 @@ test.group('host database compatibility', (group) => {
         return hash.verify(stored, password)
       },
     })
-    const outcomes = await Promise.all(
+    const results = await Promise.all(
       Array.from({ length: 30 }, () =>
         confirmations.confirmPassword(input, { ...request, password: 'wrong' }).then(
           () => 'resolved',
@@ -188,7 +188,7 @@ test.group('host database compatibility', (group) => {
       )
     )
     assert.equal(verified, 5)
-    assert.equal(outcomes.filter((code) => code === 'E_PASSWORD_CONFIRMATION_DENIED').length, 5)
-    assert.equal(outcomes.filter((code) => code === 'E_PASSWORD_CONFIRMATION_THROTTLED').length, 25)
+    assert.equal(results.filter((code) => code === 'E_PASSWORD_CONFIRMATION_DENIED').length, 5)
+    assert.equal(results.filter((code) => code === 'E_PASSWORD_CONFIRMATION_THROTTLED').length, 25)
   })
 })

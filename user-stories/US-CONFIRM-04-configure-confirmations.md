@@ -3,7 +3,7 @@
 As an application operator, I want to install the provider and storage so that confirmation operations can run with their Account Kit dependencies.
 
 **Status:** Operator.
-**Access:** Application operator configures Account Kit first, registers package provider and runs migrations. Configure does not detect the session store; the application needs a server-side session store for the logout guarantee ([US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md), [README requirements](../README.md#requirements)).
+**Access:** Application operator configures Account Kit first, using Assembler for codemods, registers package provider and runs migrations. Configure does not detect the session store; the application needs a server-side session store for the sign-out guarantee ([US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md), [README requirements](../README.md#requirements)).
 **Entry:** `node ace configure @kevinjohn/adonisjs-confirm-action-with-password`.
 **Documentation:** [Install](../README.md#install)
 **Source:** [`configure`](../configure.ts)
@@ -19,7 +19,7 @@ As an application operator, I want to install the provider and storage so that c
 | `--user-id-type` | CLI option | Optional; `integer` (default), `string` or `uuid`; selects the generated migration's user ID column type.         |
 | `--table`        | CLI option | Optional; defaults to `password_confirmations`; must be a plain SQL identifier matching `[A-Za-z_][A-Za-z0-9_]*`. |
 
-- Configure writes config, migration and provider without overwriting files; invalid option values prevent those writes. Config is written first, so an unexpected error reading `database/migrations` leaves the config file without the migration or provider. Its migration must sort after Account Kit `account_sessions`; configure does not enforce this: when no `*_account_kit_create_account_sessions.ts` migration exists it logs a warning and still writes the files.
+- Configure writes config, migration and provider without overwriting files; invalid option values, ambiguous primary migration paths and non-missing inspection failures prevent those writes. It uses the primary Lucid connection's single migration path or AdonisJS's migration directory if not set. Its migration must sort after Account Kit `account_sessions`; when no `*_account_kit_create_account_sessions.ts` migration exists it logs a warning and still writes the files. Interrupted writes remain recoverable using the [setup guidance](../README.md#install).
 - `config/password_confirmations.ts` (`defineConfig`) accepts these options:
 
 | Option             | Control                | Required/default/conditions                                                                                                                                 |
@@ -52,10 +52,10 @@ Scope: setup path; HTTP request validation, origin checks and response mapping r
 flowchart TD
     A["configure(command) reads storage flags and defaults"] --> B{"Identifiers and user ID type valid?"}
     B -->|No| C["Report invalid flags and write no files"]
-    B -->|Yes| D["Write config only when absent"]
-    D --> R{"database/migrations readable or missing?"}
-    R -->|"No (other read error)"| R2["Error rethrown; config already written, no migration or provider"]
-    R -->|Yes| B2{"Account Kit sessions migration present?"}
+    B -->|Yes| R{"One migration destination; inspections succeed or paths absent?"}
+    R -->|No| R2["Report ambiguity or inspection path; no writes"]
+    R -->|Yes| D["Write config only when absent"]
+    D --> B2{"Account Kit sessions migration present?"}
     B2 -->|No| B3["Log warning; continue"]
     B2 -->|Yes| M["Write ordered migration only when absent"]
     B3 --> M
@@ -67,4 +67,4 @@ flowchart TD
     G3 --> H["Host routes resolve service and own request boundary"]
 ```
 
-**Code references:** [Configure](../configure.ts), [SQL identifier rule](../src/sql_identifier.ts), [config types](../src/types.ts#L53), [config validation](../src/define_config.ts), [provider](../providers/password_confirmations_provider.ts#L31), [limiter requirement](../src/password_confirmations.ts#L71), [migrations read](../configure.ts#L55), [missing-migration warning](../configure.ts#L61)
+**Code references:** [Configure and migration inspection](../configure.ts), [SQL identifier rule](../src/sql_identifier.ts), [config types](../src/types.ts), [config validation](../src/define_config.ts), [provider](../providers/password_confirmations_provider.ts), [limiter requirement](../src/password_confirmations.ts)

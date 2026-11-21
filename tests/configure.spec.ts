@@ -7,10 +7,41 @@
  * file that was distributed with this source code.
  */
 
-import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile, rename } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from '@japa/runner'
+import type Configure from '@adonisjs/core/commands/configure'
+import { configure } from '../configure.js'
 import { prepareConfiguredAppRoot } from './helpers.js'
+
+/** Lightweight command for inspection-only failures: no host packages or codemods are needed. */
+function inspectionCommand(root: string, database?: unknown) {
+  const warnings: string[] = []
+  const migrations: string[] = []
+  const command = {
+    app: {
+      config: database === undefined ? undefined : { get: () => database },
+      configPath: (name: string) => join(root, 'config', name),
+      migrationsPath: () => join(root, 'host/migrations'),
+      makePath: () => root,
+      import: (specifier: string) => import(specifier),
+    },
+    parsedFlags: {},
+    logger: { warning: (message: string) => warnings.push(message), info: () => {} },
+    createCodemods: async () => ({
+      makeUsingStub: async (
+        _root: string,
+        _stub: string,
+        data: { migration?: { destination: string } }
+      ) => {
+        if (data.migration) migrations.push(data.migration.destination)
+      },
+      updateRcFile: async () => {},
+    }),
+  } as unknown as Configure
+  return { command, warnings, migrations }
+}
 
 test.group('configure', () => {
   test('publishes config, one migration and one provider, and is idempotent', async ({
@@ -170,6 +201,158 @@ test.group('configure', () => {
       await rm(root, { recursive: true, force: true })
     }
   }).timeout(30_000)
+
+  test('uses the primary Lucid connection migration path for ordering and reruns', async ({
+    assert,
+  }) => {
+    const { root, ignitor } = await prepareConfiguredAppRoot()
+    try {
+      const directory = join(root, 'schema/primary')
+      await mkdir(directory, { recursive: true })
+      const defaultDirectory = join(root, 'database/migrations')
+      const ahead = Date.now() + 60 * 60_000
+      const defaultNames = await readdir(defaultDirectory)
+      const kitMigration = defaultNames.find((file) =>
+        file.endsWith('_account_kit_create_account_sessions.ts')
+      )!
+      await rename(
+        join(defaultDirectory, kitMigration),
+        join(directory, `${ahead}_account_kit_create_account_sessions.ts`)
+      )
+      const oldConfirmation = defaultNames.find((file) =>
+        file.endsWith('_create_password_confirmations_table.ts')
+      )!
+      await rm(join(defaultDirectory, oldConfirmation))
+      await rm(join(root, 'config/password_confirmations.ts'))
+      await writeFile(
+        join(root, 'config/database.ts'),
+        `export default { connection: 'primary', connections: { primary: { migrations: { paths: ['schema/primary'] } }, other: { migrations: { paths: ['other'] } } } }`
+      )
+      const run = () =>
+        ignitor.ace().handle(['configure', '@kevinjohn/adonisjs-confirm-action-with-password'])
+      await run()
+      const names = await readdir(directory)
+      const file = names.find((name) => name.endsWith('_create_password_confirmations_table.ts'))!
+      assert.isAbove(Number.parseInt(file, 10), ahead)
+      assert.notInclude(await readdir(defaultDirectory), oldConfirmation)
+      const edited = (await readFile(join(directory, file), 'utf8')) + '\n// Host edit\n'
+      await writeFile(join(directory, file), edited)
+      await run()
+      assert.deepEqual(await readdir(directory), names)
+      assert.equal(await readFile(join(directory, file), 'utf8'), edited)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }).timeout(30_000)
+
+  test('refuses ambiguous migration directories before generating files', async ({ assert }) => {
+    const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
+    try {
+      const { command, migrations } = inspectionCommand(root, {
+        connection: 'primary',
+        connections: { primary: { migrations: { paths: ['one', 'two'] } } },
+      })
+      await assert.rejects(() => configure(command), /multiple migration paths/)
+      assert.lengthOf(migrations, 0)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test('reports non-missing inspection failures with the file path', async ({ assert }) => {
+    const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
+    try {
+      const config = join(root, 'config/password_confirmations.ts')
+      await mkdir(config, { recursive: true })
+      const { command, migrations } = inspectionCommand(root)
+      await assert.rejects(
+        () => configure(command),
+        `password_confirmations: cannot inspect ${config}`
+      )
+      assert.lengthOf(migrations, 0)
+      await rm(config, { recursive: true })
+      await mkdir(join(root, 'host'), { recursive: true })
+      const directory = join(root, 'host/migrations')
+      await writeFile(directory, '')
+      await assert.rejects(
+        () => configure(command),
+        `password_confirmations: cannot inspect ${directory}`
+      )
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test('uses the AdonisJS migration directory fallback and warns about existing ordering', async ({
+    assert,
+  }) => {
+    const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
+    try {
+      const { command, migrations, warnings } = inspectionCommand(root, {
+        connection: 'primary',
+        connections: { primary: {} },
+      })
+      await configure(command)
+      assert.lengthOf(migrations, 1)
+      assert.include(migrations[0], join(root, 'host/migrations'))
+      const directory = join(root, 'host/migrations')
+      await mkdir(directory, { recursive: true })
+      await writeFile(join(directory, '1000000000000_create_password_confirmations_table.ts'), '')
+      await writeFile(join(directory, '1000000000001_account_kit_create_account_sessions.ts'), '')
+      migrations.length = 0
+      await configure(command)
+      assert.lengthOf(migrations, 0)
+      assert.isTrue(
+        warnings.some((message) =>
+          message.includes('must sort after 1000000000001_account_kit_create_account_sessions.ts')
+        )
+      )
+      await writeFile(join(directory, '1000000000002_create_password_confirmations_table.ts'), '')
+      await assert.rejects(() => configure(command), /multiple existing confirmations migrations/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test('diagnoses invalid, ambiguous and unreadable database configuration before writes', async ({
+    assert,
+  }) => {
+    const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
+    try {
+      const path = join(root, 'config/database.json')
+      await mkdir(join(root, 'config'))
+      const { command, migrations } = inspectionCommand(root)
+      await writeFile(path, '{ not JSON }')
+      await assert.rejects(() => configure(command), `password_confirmations: cannot load ${path}`)
+      await writeFile(path, JSON.stringify({ connection: 'missing', connections: {} }))
+      await assert.rejects(() => configure(command), /no primary connection/)
+      await writeFile(
+        path,
+        JSON.stringify({
+          connection: 'primary',
+          connections: { primary: { migrations: { paths: [''] } } },
+        })
+      )
+      await assert.rejects(
+        () => configure(command),
+        /migrations.paths must contain directory names/
+      )
+      assert.lengthOf(migrations, 0)
+      await writeFile(
+        path,
+        JSON.stringify({
+          connection: 'primary',
+          connections: { primary: { migrations: { paths: ['schema'] } } },
+        })
+      )
+      await configure(command)
+      assert.include(migrations[0], join(root, 'schema'))
+      await writeFile(join(root, 'config/database.ts'), 'export default {}')
+      await assert.rejects(() => configure(command), /multiple database config files/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
 
   test('honours --user-id-type and refuses bad flags', async ({ assert }) => {
     const { root, ignitor } = await prepareConfiguredAppRoot()

@@ -10,8 +10,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { Database } from '@adonisjs/lucid/database'
 import { errors as limiterErrors } from '@adonisjs/limiter'
-import type { Limiter, LimiterManager } from '@adonisjs/limiter'
-import type { AccountKit } from '@kevinjohn/adonisjs-account-kit'
+import type { Limiter } from '@adonisjs/limiter'
 import type { CurrentAccountInput, Trx, UserId } from '@kevinjohn/adonisjs-account-kit/types'
 import { buildConfirmationBinding } from './intent_hash.js'
 import {
@@ -30,19 +29,10 @@ import type {
   ConfirmPasswordRequest,
   ResolvedPasswordConfirmationsConfig,
   ConsumeRequest,
+  PasswordConfirmationsDependencies,
 } from './types.js'
 
-export interface PasswordConfirmationsDependencies {
-  kit: Pick<AccountKit, 'authentication'>
-  db: Database
-  config: ResolvedPasswordConfirmationsConfig
-  /** Used when the config gives no `verifyPassword`; the provider passes the app hash service. */
-  verifyPassword: (hashed: string, password: string) => Promise<boolean>
-  /** The app's limiter manager; required unless `throttle` is false. */
-  limiter?: Pick<LimiterManager<any>, 'use'>
-  /** Epoch milliseconds. Injectable for tests. */
-  now?: () => number
-}
+export type { PasswordConfirmationsDependencies } from './types.js'
 
 function snapshotCurrentAccount(input: CurrentAccountInput): CurrentAccountInput {
   return {
@@ -58,9 +48,11 @@ function extractAffectedRowCount(result: unknown) {
 }
 
 /**
- * Ask for the password again before a sensitive action, built on Account Kit's public
- * `authentication.withCurrent`. Every database step runs in the Kit transaction under the
- * account lock; the password hash runs between two such transactions, never inside one.
+ * Ask for the password again before a sensitive operation, built on Account Kit's public
+ * `authentication.withCurrent`. Issuance reads and writes under the account lock in two Kit
+ * transactions; password verification and limiter storage occur outside them. Spending requires
+ * the active Kit transaction and rolls back with the protected write. Pruning uses the database
+ * directly, independently of the account lock.
  */
 export class PasswordConfirmations {
   readonly #accountKit: PasswordConfirmationsDependencies['kit']
@@ -99,7 +91,7 @@ export class PasswordConfirmations {
   }
 
   async #assertConfirmationAllowed(context: KitContext, request: ConfirmationRequest) {
-    // Host policy sees only what the confirmation binds: never the password or the confirmation id.
+    // Host authorisation sees only what the confirmation binds: never the password or confirmation id.
     const { action, scope, intent } = request
     if ((await this.#config.authorize(context, { action, scope, intent })) !== true) {
       throw new PasswordConfirmationForbiddenException()
@@ -118,7 +110,7 @@ export class PasswordConfirmations {
     return { attemptKey, failureKey: `${attemptKey}:failed`, blockKey: `${attemptKey}:blocked` }
   }
 
-  /** Account Kit's login pattern: consume first, refuse when the budget is gone. */
+  /** Account Kit's sign-in pattern: consume first, refuse when the budget is gone. */
   async #reserveAttempt(keys: { attemptKey: string; blockKey: string }) {
     const block = await this.#throttle!.get(keys.blockKey)
     if (block && block.consumed > 0) {
@@ -192,7 +184,7 @@ export class PasswordConfirmations {
         return {
           userId: context.account.id,
           // An account the Kit reports as passwordless cannot confirm with one, whatever is stored:
-          // Account Kit's login refuses it too. A null hash is a wrong password and counts as one.
+          // Account Kit's sign-in refuses it too. A null hash is a wrong password and counts as one.
           hash: context.account.hasPassword
             ? await this.#readPasswordHash(context.account.id, context.trx)
             : null,
@@ -277,8 +269,8 @@ export class PasswordConfirmations {
   /**
    * Spends a confirmation inside the caller's `withCurrent` callback. Session and account come from the
    * Kit's context, the credential revision is read live in the same transaction, so nothing the
-   * caller passes besides the confirmation and request can widen what it authorizes. The spend rolls back
-   * with the caller's transaction.
+   * caller passes besides the confirmation and request can widen its binding. The host remains
+   * responsible for resource permission. The spend rolls back with the caller's transaction.
    */
   async consume(context: KitContext, request: ConsumeRequest) {
     const signInId = this.#requireSignInId(context)

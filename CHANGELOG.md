@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Use the primary Lucid connection's migration directory during configure, refuse ambiguous paths,
+  and report non-missing inspection errors without overwriting existing files.
+- Export `PasswordConfirmationsDependencies` from `./types` as well as the existing root import.
+- Clarify password proof versus resource permission, document the host `Retry-After` integration,
+  and link the secure-note browser examples. Existing confirmation bindings and deadlines are unchanged.
+- Gate release archives on independent SQLite consumers using TypeScript 5.9.3 and 6.0.3.
+
 ## 0.2.2 - 2026-11-21
 
 - Read the live credential revision through Account Kit's callback context inside the existing

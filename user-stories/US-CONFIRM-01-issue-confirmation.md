@@ -1,9 +1,9 @@
 # US-CONFIRM-01 — Issue a confirmation after re-entering the password
 
-As a signed-in account holder, I want to confirm my password for a named sensitive action so that the application can require recent proof before it changes important data.
+As a signed-in account holder, I want to confirm my password for a named sensitive operation so that the application can require recent proof before it changes important data.
 
 **Status:** Current, for a current Account Kit session with session management enabled.
-**Access:** Account Kit session sign-in with a server-side session store (the cookie store keeps a copied session alive after logout, so the logout guarantee in [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md) needs a server-side store; [README requirements](../README.md#requirements)); access tokens are refused because they have no sign-in row. Host must reject foreign-origin issuance requests before invoking the service.
+**Access:** Account Kit session sign-in with a server-side session store (the cookie store keeps a copied session alive after sign-out, so the sign-out guarantee in [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md) needs a server-side store; [README requirements](../README.md#requirements)); access tokens are refused because they have no sign-in row. Host must reject foreign-origin issuance requests before invoking the service.
 **Entry:** Host-owned issuance endpoint calls `passwordConfirmations.confirmPassword(input, request)`; the package has no HTTP control.
 **Documentation:** [README usage and host requirements](../README.md#use)
 **Source:** [`PasswordConfirmations.confirmPassword`](../src/password_confirmations.ts)
@@ -11,8 +11,8 @@ As a signed-in account holder, I want to confirm my password for a named sensiti
 
 ## Acceptance criteria
 
-- The host supplies action and scope strings of 1–255 characters, a required intent made only of plain JSON values (finite numbers and safe integers; hashed inside an `{action, scope, intent}` wrapper, so it may nest at most 31 container levels around a value, and a value at depth 33 or deeper is refused), and the password string. These are API inputs, not package-rendered form fields.
-- Authorization runs before password verification and again before issue; a false policy rejects.
+- The host supplies the operation name (`action`) and resource key (`scope`) as strings of 1–255 characters, a required intent made only of plain JSON values (finite numbers and safe integers; hashed inside an `{action, scope, intent}` wrapper, so it may nest at most 31 container levels around a value, and a value at depth 33 or deeper is refused), and the password string. These are API inputs, not package-rendered form fields.
+- The host authorisation callback `authorize` runs before password verification and again before issue; anything other than literal `true` refuses. The proof is bound to the operation, not a permission grant.
 - A correct password returns `confirmationId` and `expiresAt`; malformed/wrong password, stale verification, missing sign-in registry, refusal or exhausted throttle returns an error and issues nothing.
 - Default failed-attempt budget is 5 per account per minute, then a 20-minute block; `throttle: false` requires host throttling reserved before hash verification.
 
@@ -20,11 +20,11 @@ As a signed-in account holder, I want to confirm my password for a named sensiti
 
 ```mermaid
 flowchart TD
-    A["Host receives a password-confirmation request for an action"] --> B["Host validates account-holder input"]
+    A["Host receives a password-confirmation request for an operation"] --> B["Host validates account-holder input"]
     B --> C{"Host origin check passes?"}
     C -->|No| D["Host rejects request; no service call"]
     C -->|Yes| E["Host calls confirmPassword"]
-    E --> F{"Password and policy accepted?"}
+    E --> F{"Password and authorisation accepted?"}
     F -->|No| G["Host maps refusal or error"]
     F -->|Yes| H["Host receives short-lived confirmation ID"]
 ```
@@ -50,4 +50,4 @@ flowchart TD
     I -->|Yes| K["delete this sign-in's spent/expired rows, insert confirmation row, return id/expiry"]
 ```
 
-**Code references:** [Entry/service](../src/password_confirmations.ts#L149), [attempt reservation](../src/password_confirmations.ts#L165), [request binding](../src/intent_hash.ts), [return type](../src/types.ts#L40), [config](../src/types.ts#L53)
+**Code references:** [Entry/service and attempt reservation](../src/password_confirmations.ts), [request binding](../src/intent_hash.ts), [return and config types](../src/types.ts)

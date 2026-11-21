@@ -7,16 +7,32 @@
  * file that was distributed with this source code.
  */
 
+import type { AccountKit } from '@kevinjohn/adonisjs-account-kit'
 import type { CurrentAccountContext, Trx, UserId } from '@kevinjohn/adonisjs-account-kit/types'
+import type { Database } from '@adonisjs/lucid/database'
+import type { LimiterManager } from '@adonisjs/limiter'
+
+/** Dependencies for constructing the service without the AdonisJS provider. */
+export interface PasswordConfirmationsDependencies {
+  kit: Pick<AccountKit, 'authentication'>
+  db: Database
+  config: ResolvedPasswordConfirmationsConfig
+  /** Used when the config gives no `verifyPassword`; the provider passes the app hash service. */
+  verifyPassword: (hashed: string, password: string) => Promise<boolean>
+  /** The app's limiter manager; required unless `throttle` is false. */
+  limiter?: Pick<LimiterManager<any>, 'use'>
+  /** Epoch milliseconds. Injectable for tests. */
+  now?: () => number
+}
 
 /** The context Account Kit provides to an active `authentication.withCurrent` callback. */
 export type KitContext = CurrentAccountContext
 
-/** The operation a confirmation authorizes: what, where, and the exact request contents. */
+/** The operation a password confirmation is bound to, not a grant of resource permission. */
 export interface ConfirmationRequest {
-  /** A stable action name, such as `transfer-ownership`. */
+  /** A stable operation name, such as `transfer-ownership`. */
   action: string
-  /** The resource the action applies to, such as a company id. */
+  /** The resource key the operation applies to, such as a company id. */
   scope: string
   /**
    * The exact operation contents. JSON values only; bound by a canonical SHA-256 hash of its JSON
@@ -42,7 +58,7 @@ export interface IssuedConfirmation {
   expiresAt: number
 }
 
-/** Host policy, re-run under the Account Kit lock at both issuance stages and at spend. */
+/** Host authorisation callback, run under the Account Kit lock at both issuance stages and at spend. */
 export type AuthorizeConfirmation = (
   context: KitContext,
   request: ConfirmationRequest
@@ -70,14 +86,15 @@ export interface PasswordConfirmationsConfig {
    */
   verifyPassword?: (hashed: string, password: string) => Promise<boolean>
   /**
-   * Host policy such as "only the owner, never while masquerading". Default allows. Use
+   * Host authorisation callback such as "only the owner, never while masquerading". Default
+   * allows; anything other than literal `true` refuses. Use
    * `context.trx` only, no side effects: it runs at both issuance stages, at spend, and again on a
    * retry. Treat `request.intent` as read-only.
    */
   authorize?: AuthorizeConfirmation
   /**
    * Failed password confirmations allowed per account through the app's `@adonisjs/limiter`
-   * before it is blocked. Default 5 per minute, then blocked for 20 minutes (Account Kit's login
+   * before it is blocked. Default 5 per minute, then blocked for 20 minutes (Account Kit's sign-in
    * identity budget). `false` turns throttling off; the host must then throttle the route.
    */
   throttle?: false | Partial<ConfirmationThrottle>
