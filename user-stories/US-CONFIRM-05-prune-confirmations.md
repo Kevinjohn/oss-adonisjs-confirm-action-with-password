@@ -14,12 +14,16 @@ As an application operator, I want to remove spent and expired confirmations so 
 - `prune()` deletes rows whose stored `expires_at` deadline has passed, plus rows with a non-null `consumed_at`. The deadline is fixed at issue, so the window configured for the pruning process does not change which rows are expired.
 - The method returns the number of deleted rows. The host chooses and schedules a cadence appropriate to its storage and operations.
 
+- Equality with the stored deadline qualifies for deletion. Running the operation again returns zero if there are no further qualifying rows. Issuance also cleans spent or expired rows for that sign-in only.
+
 ## User flow
 
 ```mermaid
 flowchart TD
     A["Operator's scheduled maintenance runs"] --> B["Prune spent and expired confirmation rows"]
-    B --> C["Receive count of deleted rows"]
+    B --> D{"Database deletion succeeds?"}
+    D -->|Yes| C["Receive count of deleted rows"]
+    D -->|No| E["Host handles maintenance error"]
 ```
 
 ## Code flow
@@ -29,8 +33,10 @@ Scope: package deletion method; scheduler and cadence are host-owned.
 ```mermaid
 flowchart TD
     A["Host scheduler calls PasswordConfirmations.prune"] --> B["Read the current time"]
-    B --> C["Delete rows at/before cutoff or with consumed_at"]
-    C --> D["Return affected row count"]
+    B --> C["Delete rows at/before cutoff or with non-null consumed_at"]
+    C --> E{"Delete succeeds?"}
+    E -->|Yes| D["Return affected row count"]
+    E -->|No| F["Reject with database error"]
 ```
 
 **Code references:** [prune method](../src/password_confirmations.ts), [window configuration](../src/types.ts)

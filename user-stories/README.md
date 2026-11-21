@@ -1,16 +1,19 @@
 # User story catalogue
 
-Source baseline: `2a5dd8cf07c4869bd4c2d3bf1d310597d452239d` (origin/main, 2026-11-14). Scope: public package API, configuration and provider setup, issuance and spending, credential/session invalidation, throttling, and operator pruning. Source-reviewed only; no runtime journeys were exercised for this catalogue.
+Reviewed against `5bea3e4a3aaf2435bbc2ee18c8f0f8664544f01e`. The catalogue covers account-holder, host and release-maintainer journeys. Test links identify executable evidence.
 
 ## Index
 
-| Story                                                     | Action                                              | Status   |
-| --------------------------------------------------------- | --------------------------------------------------- | -------- |
-| [US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md)      | Issue a confirmation after re-entering the password | Current  |
-| [US-CONFIRM-02](US-CONFIRM-02-spend-confirmation.md)      | Spend a confirmation with the sensitive change      | Current  |
-| [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md)    | Reject confirmations after account security changes | Current  |
-| [US-CONFIRM-04](US-CONFIRM-04-configure-confirmations.md) | Configure confirmation storage and provider         | Operator |
-| [US-CONFIRM-05](US-CONFIRM-05-prune-confirmations.md)     | Remove spent or expired confirmations               | Operator |
+| Story                                                          | Action                                              | Status   |
+| -------------------------------------------------------------- | --------------------------------------------------- | -------- |
+| [US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md)           | Issue a confirmation after re-entering the password | Current  |
+| [US-CONFIRM-02](US-CONFIRM-02-spend-confirmation.md)           | Spend a confirmation with the sensitive change      | Current  |
+| [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md)         | Reject confirmations after account security changes | Current  |
+| [US-CONFIRM-04](US-CONFIRM-04-configure-confirmations.md)      | Configure confirmation storage and provider         | Operator |
+| [US-CONFIRM-05](US-CONFIRM-05-prune-confirmations.md)          | Remove spent or expired confirmations               | Operator |
+| [US-CONFIRM-06](US-CONFIRM-06-recover-from-throttling.md)      | Recover from password-check throttling              | Current  |
+| [US-CONFIRM-07](US-CONFIRM-07-upgrade-confirmation-storage.md) | Upgrade existing confirmation storage               | Operator |
+| [US-CONFIRM-08](US-CONFIRM-08-verify-release-archive.md)       | Verify and release the candidate archive            | Operator |
 
 ## Files
 
