@@ -8,7 +8,7 @@
  */
 
 import { lstat, readFile, stat } from 'node:fs/promises'
-import { basename, dirname, extname, relative, resolve, join, sep } from 'node:path'
+import { basename, dirname, extname, relative, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type Configure from '@adonisjs/core/commands/configure'
 import { RuntimeException } from '@adonisjs/core/exceptions'
@@ -86,7 +86,8 @@ async function migrationSettings(command: Configure) {
     )
   }
   return {
-    directory: paths.length === 1 ? resolve(app.makePath(), paths[0]) : app.migrationsPath(),
+    directory:
+      paths.length === 1 ? fileURLToPath(new URL(paths[0], app.appRoot)) : app.migrationsPath(),
     naturalSort: connection.migrations?.naturalSort ?? false,
   }
 }

@@ -9,7 +9,8 @@
 
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile, rename, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, sep } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { test } from '@japa/runner'
 import type Configure from '@adonisjs/core/commands/configure'
 import { configure } from '../configure.js'
@@ -25,7 +26,7 @@ function inspectionCommand(root: string, database?: unknown) {
       config: database === undefined ? undefined : { get: () => database },
       configPath: (name: string) => join(root, 'config', name),
       migrationsPath: () => join(root, 'host/migrations'),
-      makePath: () => root,
+      appRoot: pathToFileURL(root + sep),
       import: (specifier: string) => import(specifier),
     },
     parsedFlags: {},
@@ -203,12 +204,12 @@ test.group('configure', () => {
     }
   }).timeout(30_000)
 
-  test('uses the primary Lucid connection migration path for ordering and reruns', async ({
+  test('uses the primary Lucid connection encoded migration path for ordering and reruns', async ({
     assert,
   }) => {
     const { root, ignitor } = await prepareConfiguredAppRoot()
     try {
-      const directory = join(root, 'schema/primary')
+      const directory = join(root, 'schema/primary migrations')
       await mkdir(directory, { recursive: true })
       const defaultDirectory = join(root, 'database/migrations')
       const ahead = Date.now() + 60 * 60_000
@@ -227,13 +228,17 @@ test.group('configure', () => {
       await rm(join(root, 'config/password_confirmations.ts'))
       await writeFile(
         join(root, 'config/database.ts'),
-        `export default { connection: 'primary', connections: { primary: { migrations: { paths: ['schema/primary'] } }, other: { migrations: { paths: ['other'] } } } }`
+        `export default { connection: 'primary', connections: { primary: { migrations: { paths: ['schema/primary%20migrations'] } }, other: { migrations: { paths: ['other'] } } } }`
       )
       const run = () =>
         ignitor.ace().handle(['configure', '@kevinjohn/adonisjs-confirm-action-with-password'])
       await run()
       const names = await readdir(directory)
-      const file = names.find((name) => name.endsWith('_create_password_confirmations_table.ts'))!
+      const confirmations = names.filter((name) =>
+        name.endsWith('_create_password_confirmations_table.ts')
+      )
+      assert.lengthOf(confirmations, 1)
+      const [file] = confirmations
       assert.isAbove(Number.parseInt(file, 10), ahead)
       assert.notInclude(await readdir(defaultDirectory), oldConfirmation)
       const edited = (await readFile(join(directory, file), 'utf8')) + '\n// Host edit\n'
@@ -384,17 +389,54 @@ test.group('configure', () => {
     }
   })
 
-  test('refuses to treat a JSON migration as an installed schema module', async ({ assert }) => {
+  test('checks existing migration order using the configured Lucid sort mode', async ({
+    assert,
+  }) => {
     const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
     try {
       const directory = join(root, 'host/migrations')
       await mkdir(directory, { recursive: true })
-      const file = '1000000000000_create_password_confirmations_table.json'
-      await writeFile(join(directory, file), '{}')
-      const { command, migrations } = inspectionCommand(root)
-      await assert.rejects(() => configure(command), /is JSON and cannot run as a migration/)
-      assert.deepEqual(await readdir(directory), [file])
-      assert.lengthOf(migrations, 0)
+      await writeFile(join(directory, '9_create_password_confirmations_table.ts'), '')
+      await writeFile(join(directory, '10_account_kit_create_account_sessions.ts'), '')
+      for (const naturalSort of [false, true]) {
+        const { command, migrations, warnings } = inspectionCommand(root, {
+          connection: 'primary',
+          connections: { primary: { migrations: { naturalSort } } },
+        })
+        await configure(command)
+        assert.lengthOf(migrations, 0)
+        assert.equal(
+          warnings.some((message) => message.includes('must sort after 10_account_kit')),
+          naturalSort
+        )
+      }
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test('refuses JSON migrations matching confirmations or Account Kit sessions', async ({
+    assert,
+  }) => {
+    const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
+    try {
+      const directory = join(root, 'host/migrations')
+      await mkdir(directory, { recursive: true })
+      for (const file of [
+        '1000000000000_create_password_confirmations_table.json',
+        '1000000000001_account_kit_create_account_sessions.json',
+      ]) {
+        const path = join(directory, file)
+        await writeFile(path, '{}')
+        const { command, migrations } = inspectionCommand(root)
+        await assert.rejects(
+          () => configure(command),
+          `password_confirmations: ${path} is JSON and cannot run as a migration; install a schema module manually and check migration history before rerunning configure`
+        )
+        assert.deepEqual(await readdir(directory), [file])
+        assert.lengthOf(migrations, 0)
+        await rm(path)
+      }
     } finally {
       await rm(root, { recursive: true, force: true })
     }
