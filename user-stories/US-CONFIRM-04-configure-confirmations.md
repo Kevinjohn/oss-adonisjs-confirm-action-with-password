@@ -19,7 +19,7 @@ As an application operator, I want to install the provider and storage so that c
 | `--user-id-type` | CLI option | Optional; `integer` (default), `string` or `uuid`; selects the generated migration's user ID column type.         |
 | `--table`        | CLI option | Optional; defaults to `password_confirmations`; must be a plain SQL identifier matching `[A-Za-z_][A-Za-z0-9_]*`. |
 
-- Configure writes config, migration and provider without overwriting files; invalid option values, ambiguous primary migration paths and non-missing inspection failures prevent those writes. It uses the primary Lucid connection's single migration path or AdonisJS's migration directory if not set. Its migration must sort after Account Kit `account_sessions`; when no `*_account_kit_create_account_sessions.ts` migration exists it logs a warning and still writes the files. Interrupted writes remain recoverable using the [setup guidance](../README.md#install).
+- Configure writes config, migration and provider without overwriting files; invalid option values, ambiguous primary migration paths and non-missing inspection failures prevent those writes. It uses the primary Lucid connection's single migration path or AdonisJS's migration directory if not set. It preserves existing Lucid migration identities, including nested paths. A new migration goes next to the last Lucid-discoverable migration and must sort after it. If that is unsafe, configure stops before writing and asks the operator to install the stub manually. If Lucid has no Account Kit `account_sessions` migration, configure logs a warning and continues. Interrupted writes remain recoverable using the [setup guidance](../README.md#install).
 - `config/password_confirmations.ts` (`defineConfig`) accepts these options:
 
 | Option             | Control                | Required/default/conditions                                                                                                                                                                                                           |
@@ -59,7 +59,7 @@ Scope: setup path; HTTP request validation, origin checks and response mapping r
 flowchart TD
     A["configure(command) reads storage flags and defaults"] --> B{"Identifiers and user ID type valid?"}
     B -->|No| C["Report invalid flags and write no files"]
-    B -->|Yes| R{"Unambiguous migration destination and existing migration; inspections succeed or paths absent?"}
+    B -->|Yes| R{"Unambiguous Lucid inventory and safe migration destination?"}
     R -->|No| R2["Report ambiguity or inspection path; no writes"]
     R -->|Yes| W["Warn if existing config or migration differs from flags"]
     W --> D["Write config only when absent"]
@@ -68,7 +68,7 @@ flowchart TD
     B2 -->|Yes| N{"Existing confirmation migration?"}
     B3 --> N
     N -->|Yes| P["Keep migration; warn if before/equal to sessions migration"]
-    N -->|No| M["Write migration ordered after all existing migrations"]
+    N -->|No| M["Write migration next to, and ordered after, the last Lucid entry"]
     P --> E
     M --> E["Register provider"]
     E --> F{"At app configuration load, defineConfig validates window, identifiers and throttle?"}

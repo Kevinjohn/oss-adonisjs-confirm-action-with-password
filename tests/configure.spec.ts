@@ -7,13 +7,14 @@
  * file that was distributed with this source code.
  */
 
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile, rename } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile, rename, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from '@japa/runner'
 import type Configure from '@adonisjs/core/commands/configure'
 import { configure } from '../configure.js'
-import { prepareConfiguredAppRoot } from './helpers.js'
+import { MigrationRunner } from '@adonisjs/lucid/migration'
+import { bootFixture, prepareConfiguredAppRoot } from './helpers.js'
 
 /** Lightweight command for inspection-only failures: no host packages or codemods are needed. */
 function inspectionCommand(root: string, database?: unknown) {
@@ -240,6 +241,75 @@ test.group('configure', () => {
       await run()
       assert.deepEqual(await readdir(directory), names)
       assert.equal(await readFile(join(directory, file), 'utf8'), edited)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  }).timeout(30_000)
+
+  test('ignores symlinks, publishes after a nested sessions migration and preserves the new identity', async ({
+    assert,
+  }) => {
+    const { root, ignitor } = await prepareConfiguredAppRoot(true)
+    try {
+      const directory = join(root, 'database/migrations')
+      const names = await readdir(directory)
+      const sessions = names.find((file) =>
+        file.endsWith('_account_kit_create_account_sessions.ts')
+      )!
+      const confirmation = names.find((file) =>
+        file.endsWith('_create_password_confirmations_table.ts')
+      )!
+      const prior = join(directory, 'prior')
+      await mkdir(prior)
+      await rename(join(directory, sessions), join(prior, sessions))
+      await rename(join(directory, confirmation), join(root, 'outside.ts'))
+      await symlink(
+        join(root, 'outside.ts'),
+        join(directory, '1_create_password_confirmations_table.ts')
+      )
+      await symlink(
+        join(root, 'absent.ts'),
+        join(directory, '2_create_password_confirmations_table.ts')
+      )
+      await ignitor
+        .ace()
+        .handle([
+          'configure',
+          '@kevinjohn/adonisjs-confirm-action-with-password',
+          '--user-id-type=string',
+        ])
+
+      const fixture = await bootFixture({ sharedRoot: root, hostProfile: true })
+      try {
+        const runner = new MigrationRunner(fixture.db, fixture.app, {
+          direction: 'up',
+          dryRun: false,
+        })
+        const before = await runner.getList()
+        const confirmations = before.filter(({ name }) =>
+          name.endsWith('_create_password_confirmations_table')
+        )
+        assert.lengthOf(confirmations, 1)
+        const parent = before.findIndex(({ name }) =>
+          name.endsWith('_account_kit_create_account_sessions')
+        )
+        assert.isAtLeast(parent, 0)
+        assert.isAbove(before.indexOf(confirmations[0]), parent)
+        assert.match(confirmations[0].name, /^database\/migrations\/prior\//)
+        assert.equal(confirmations[0].status, 'migrated')
+        assert.isTrue(await fixture.db.connection().schema.hasTable('password_confirmations'))
+        assert.deepEqual(await fixture.db.rawQuery('PRAGMA foreign_keys'), [{ foreign_keys: 1 }])
+        await ignitor
+          .ace()
+          .handle([
+            'configure',
+            '@kevinjohn/adonisjs-confirm-action-with-password',
+            '--user-id-type=string',
+          ])
+        assert.deepEqual(await runner.getList(), before)
+      } finally {
+        await fixture.close()
+      }
     } finally {
       await rm(root, { recursive: true, force: true })
     }
