@@ -7,11 +7,12 @@
  * file that was distributed with this source code.
  */
 
-import { readdir, readFile, stat } from 'node:fs/promises'
-import { resolve, join } from 'node:path'
+import { lstat, readFile, stat } from 'node:fs/promises'
+import { basename, dirname, extname, relative, join, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import type Configure from '@adonisjs/core/commands/configure'
 import { RuntimeException } from '@adonisjs/core/exceptions'
+import { sourceFiles } from '@adonisjs/lucid/utils'
 import type { DatabaseConfig } from '@adonisjs/lucid/types/database'
 import { isSqlIdentifier } from './src/sql_identifier.js'
 
@@ -35,7 +36,7 @@ async function inspect<T>(path: string, read: () => Promise<T>): Promise<T | und
 }
 
 /** Configure does not boot the app; read Lucid's primary connection config without booting it. */
-async function migrationDirectory(command: Configure): Promise<string> {
+async function migrationSettings(command: Configure) {
   const app = command.app
   let database = app.config?.get<DatabaseConfig>('database')
   if (!database) {
@@ -68,7 +69,7 @@ async function migrationDirectory(command: Configure): Promise<string> {
         throw new RuntimeException(`password_confirmations: invalid database config in ${path}`)
     }
   }
-  if (!database) return app.migrationsPath()
+  if (!database) return { directory: app.migrationsPath(), naturalSort: false }
   const connection = database.connections?.[database.connection]
   if (!connection) {
     throw new RuntimeException('password_confirmations: config/database has no primary connection')
@@ -84,7 +85,11 @@ async function migrationDirectory(command: Configure): Promise<string> {
       'password_confirmations: multiple migration paths on the primary connection; configure with one migration directory, or install the stub manually after the Account Kit migrations'
     )
   }
-  return paths.length === 1 ? resolve(app.makePath(), paths[0]) : app.migrationsPath()
+  return {
+    directory:
+      paths.length === 1 ? fileURLToPath(new URL(paths[0], app.appRoot)) : app.migrationsPath(),
+    naturalSort: connection.migrations?.naturalSort ?? false,
+  }
 }
 
 /**
@@ -108,14 +113,56 @@ export async function configure(command: Configure) {
     )
     return
   }
-  const directory = await migrationDirectory(command)
-  const migrationFileNames = (await inspect(directory, () => readdir(directory))) ?? []
-  const suffix = '_create_password_confirmations_table.ts'
-  const existingMigrations = migrationFileNames.filter((file) => file.endsWith(suffix))
+  const { directory, naturalSort } = await migrationSettings(command)
+  const { files } = (await inspect(directory, async () => {
+    const info = await stat(directory)
+    if (!info.isDirectory()) throw new RuntimeException('Expected a migration directory')
+    return sourceFiles(pathToFileURL(directory + sep), '.', naturalSort)
+  })) ?? { files: [] }
+  const migrationFileNames = files.map((file) => relative(directory, file.absPath))
+  const suffix = '_create_password_confirmations_table'
+  const sessionsSuffix = '_account_kit_create_account_sessions'
+  const hasSuffix = (file: string, name: string) => basename(file, extname(file)).endsWith(name)
+  const jsonMigration = migrationFileNames.find(
+    (file) =>
+      extname(file) === '.json' && (hasSuffix(file, suffix) || hasSuffix(file, sessionsSuffix))
+  )
+  if (jsonMigration) {
+    throw new RuntimeException(
+      `password_confirmations: ${join(directory, jsonMigration)} is JSON and cannot run as a migration; install a schema module manually and check migration history before rerunning configure`
+    )
+  }
+  const existingMigrations = migrationFileNames.filter((file) => hasSuffix(file, suffix))
   if (existingMigrations.length > 1) {
     throw new RuntimeException(
       `password_confirmations: multiple existing confirmations migrations in ${directory}`
     )
+  }
+  const existingConfirmationMigration = existingMigrations[0]
+  // Sessions must precede confirmations. Place a fresh child after the last Lucid migration
+  // in its directory so relative-path sorting cannot put the child before a nested parent.
+  const sessionsMigration = migrationFileNames.findLast((file) => hasSuffix(file, sessionsSuffix))
+  let destination: string | undefined
+  if (!existingConfirmationMigration) {
+    const last = migrationFileNames.at(-1)
+    let newest = BigInt(Date.now()) - 1n
+    for (const file of migrationFileNames) {
+      const prefix = BigInt(/^(\d+)/.exec(basename(file))?.[1] ?? '0')
+      if (prefix > newest) newest = prefix
+    }
+    const filename = join(last ? dirname(last) : '.', `${newest + 1n}${suffix}.ts`)
+    const followsLast =
+      last === undefined ||
+      (naturalSort
+        ? last.localeCompare(filename, undefined, { numeric: true, sensitivity: 'base' }) < 0
+        : last < filename)
+    const path = join(directory, filename)
+    if (!followsLast || (await inspect(path, () => lstat(path)))) {
+      throw new RuntimeException(
+        `password_confirmations: cannot safely place a migration at ${path}; install the stub manually after the Account Kit migrations without renaming existing migrations`
+      )
+    }
+    destination = path
   }
   const codemods = await command.createCodemods()
   codemods.overwriteExisting = false
@@ -132,7 +179,6 @@ export async function configure(command: Configure) {
     `table: '${tableName}'`,
     `usersTable: '${usersTable}'`,
   ])
-  const existingConfirmationMigration = existingMigrations[0]
   if (existingConfirmationMigration) {
     await warnIfExistingConfigDiffers(join(directory, existingConfirmationMigration), [
       `tableName = '${tableName}'`,
@@ -144,33 +190,29 @@ export async function configure(command: Configure) {
     tableName,
     usersTable,
   })
-  // The confirmations table references Account Kit's account_sessions, so its migration must run after the
-  // Kit's (PostgreSQL rejects a foreign key to a table that does not exist yet).
-  const sessionsMigration = migrationFileNames.find((file) =>
-    file.endsWith('_account_kit_create_account_sessions.ts')
-  )
   if (!sessionsMigration) {
     command.logger.warning(
       'password_confirmations: run node ace configure @kevinjohn/adonisjs-account-kit first; the confirmations migration must sort after its account_sessions migration'
     )
   }
   if (existingConfirmationMigration) {
-    if (sessionsMigration && existingConfirmationMigration <= sessionsMigration) {
+    if (
+      sessionsMigration &&
+      migrationFileNames.indexOf(existingConfirmationMigration) <=
+        migrationFileNames.indexOf(sessionsMigration)
+    ) {
       command.logger.warning(
         `password_confirmations: ${existingConfirmationMigration} must sort after ${sessionsMigration}; check migration history before making any changes`
       )
     }
     command.logger.info(`Skipped ${join(directory, existingConfirmationMigration)}`)
-  } else {
-    // Sort after every existing migration even when one carries a timestamp ahead of this clock.
-    const newest = Math.max(...migrationFileNames.map((file) => Number.parseInt(file, 10) || 0))
-    const prefix = Math.max(Date.now(), newest + 1)
+  } else if (destination) {
     await codemods.makeUsingStub(stubsRoot, 'migrations/create_password_confirmations_table.stub', {
       migration: {
         tableName,
         usersTable,
         userIdColumn: userIdColumns[userIdType],
-        destination: join(directory, `${prefix}${suffix}`),
+        destination,
       },
     })
   }

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use Lucid migration discovery when configuring confirmations. Preserve existing migration paths
+  and place a new confirmations migration after the existing migration sequence.
+
 ## 0.3.0 - 2026-11-21
 
 - Require Account Kit 0.5.0.
