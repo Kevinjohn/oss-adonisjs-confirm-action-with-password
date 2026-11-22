@@ -120,7 +120,17 @@ export async function configure(command: Configure) {
   })) ?? { files: [] }
   const migrationFileNames = files.map((file) => relative(directory, file.absPath))
   const suffix = '_create_password_confirmations_table'
+  const sessionsSuffix = '_account_kit_create_account_sessions'
   const hasSuffix = (file: string, name: string) => basename(file, extname(file)).endsWith(name)
+  const jsonMigration = migrationFileNames.find(
+    (file) =>
+      extname(file) === '.json' && (hasSuffix(file, suffix) || hasSuffix(file, sessionsSuffix))
+  )
+  if (jsonMigration) {
+    throw new RuntimeException(
+      `password_confirmations: ${join(directory, jsonMigration)} is JSON and cannot run as a migration; install a schema module manually and check migration history before rerunning configure`
+    )
+  }
   const existingMigrations = migrationFileNames.filter((file) => hasSuffix(file, suffix))
   if (existingMigrations.length > 1) {
     throw new RuntimeException(
@@ -130,9 +140,7 @@ export async function configure(command: Configure) {
   const existingConfirmationMigration = existingMigrations[0]
   // Sessions must precede confirmations. Place a fresh child after the last Lucid migration
   // in its directory so relative-path sorting cannot put the child before a nested parent.
-  const sessionsMigration = migrationFileNames.findLast((file) =>
-    hasSuffix(file, '_account_kit_create_account_sessions')
-  )
+  const sessionsMigration = migrationFileNames.findLast((file) => hasSuffix(file, sessionsSuffix))
   let destination: string | undefined
   if (!existingConfirmationMigration) {
     const last = migrationFileNames.at(-1)

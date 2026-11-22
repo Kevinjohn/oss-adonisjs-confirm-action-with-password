@@ -384,6 +384,22 @@ test.group('configure', () => {
     }
   })
 
+  test('refuses to treat a JSON migration as an installed schema module', async ({ assert }) => {
+    const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
+    try {
+      const directory = join(root, 'host/migrations')
+      await mkdir(directory, { recursive: true })
+      const file = '1000000000000_create_password_confirmations_table.json'
+      await writeFile(join(directory, file), '{}')
+      const { command, migrations } = inspectionCommand(root)
+      await assert.rejects(() => configure(command), /is JSON and cannot run as a migration/)
+      assert.deepEqual(await readdir(directory), [file])
+      assert.lengthOf(migrations, 0)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test('diagnoses invalid, ambiguous and unreadable database configuration before writes', async ({
     assert,
   }) => {
