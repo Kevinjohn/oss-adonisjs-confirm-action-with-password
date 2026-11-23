@@ -17,6 +17,9 @@
   functions and a `throttle` that is neither an object nor `false`, each with
   `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` naming the key. Absent options keep their defaults; a
   duration that fails to parse keeps the parser's error as `cause`.
+  Behaviour change for untyped configs: a `throttle` of `true` or another non-object value, an
+  array `throttle`, and a falsy `readPasswordHash` such as `false` previously ran with the defaults
+  and now stop the application at load. The published types already forbid these values.
 
 ## 0.3.2 - 2026-11-23
 
