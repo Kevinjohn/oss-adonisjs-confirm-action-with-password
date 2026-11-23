@@ -30,13 +30,14 @@ flowchart TD
 
 ## Code flow
 
-Scope: package limiter-enabled path after the first `withCurrent` stage; host response handling is a separate boundary.
+Scope: package limiter-enabled path after the first `withCurrent` stage. The exception hands off to the [host exception handler](../README.md#errors), and a correct password resumes [issuance at stage two](US-CONFIRM-01-issue-confirmation.md#code-flow).
 
 ```mermaid
 flowchart TD
     A["confirmPassword: build account throttle keys"] --> B{"reserveAttempt: active block or exhausted budget?"}
     B -->|Yes| C["Throw PasswordConfirmationThrottledException"]
-    C --> D["Host sets Retry-After from retryAfterSeconds; normal handler negotiates response"]
+    C --> D["Hand off retryAfterSeconds to host exception handler"]
+    B -->|Limiter fault| L["Propagate limiter error"]
     B -->|No, reserved| E{"Password verification outcome?"}
     E -->|Wrong| F{"recordPasswordFailure reaches requests?"}
     F -->|Yes| G["Set block key; delete attempt and failure counts"]
@@ -44,7 +45,10 @@ flowchart TD
     F -->|No| H
     E -->|Throws| I["Refund attempt; rethrow, or AggregateError if refund fails"]
     E -->|Correct| J["Record verifiedAt; reset attempt and failure counts"]
-    J --> K["Continue stage 2 issuance checks"]
+    J -->|Reset succeeds| K["Continue stage 2 issuance checks"]
+    F -->|Limiter fault| L
+    G -->|Limiter fault| L
+    J -->|Limiter fault| L
 ```
 
 **Code references:** [Implementation](../src/password_confirmations.ts), [regression evidence](../tests/throttle.spec.ts).

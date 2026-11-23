@@ -12,7 +12,8 @@ As a signed-in account holder, I want to confirm my password for a named sensiti
 ## Acceptance criteria
 
 - The host supplies the operation name (`action`) and resource key (`scope`) as strings of 1–255 characters, a required intent made only of plain JSON values (finite numbers and safe integers; hashed inside an `{action, scope, intent}` wrapper, so it may nest at most 31 container levels around a value, and a value at depth 33 or deeper is refused), and the password string. These are API inputs, not package-rendered form fields.
-- The host authorisation callback `authorize` runs before password verification and again before issue; anything other than literal `true` refuses. It receives the Kit context and only `{ action, scope, intent }`, never the password. The proof is bound to the operation, not a permission grant; keep the intent unchanged after the call starts.
+- When configured, the [host authorisation callback](US-CONFIRM-09-register-authorization.md) runs before password verification and again before issue; anything other than literal `true` refuses. It receives the Kit context and only `{ action, scope, intent }`, never the password. The proof is bound to the operation, not a permission grant; keep the intent unchanged after the call starts.
+- If Account Kit reports `E_ACCOUNT_KIT_POST_COMMIT` while taking the stage-one snapshot, issuance stops before verification. If issuance committed and then reports this error, the host has no ID to return. Ask for a fresh confirmation and let the orphan expire. [README errors](../README.md#errors)
 - A correct password returns `confirmationId` and `expiresAt`; malformed/wrong password, stale verification, missing sign-in registry, refusal or exhausted throttle returns an error and issues nothing.
 - Default failed-attempt budget is 5 per account per minute, then a 20-minute block; `throttle: false` requires host throttling reserved before hash verification.
 
@@ -43,7 +44,10 @@ flowchart TD
     B -->|Yes| C{"withCurrent stage 1 accepts current account, registered sign-in and authorize?"}
     C -->|No| X
     C -->|Yes| S["Read password hash if account has password"]
-    S --> T{"Package throttle on?"}
+    S --> S1{"Snapshot transaction outcome?"}
+    S1 -->|Pre-commit failure| X
+    S1 -->|Committed with follow-up error| X1["Propagate Kit error before verification"]
+    S1 -->|Success| T{"Package throttle on?"}
     T -->|"No (throttle: false; host throttles in its own route)"| E["verify hash outside Kit transaction"]
     T -->|Yes| D{"reserveAttempt: block and budget allow?"}
     D -->|No| D2["Throttle refusal (429) or limiter fault; no hash run, no row issued"]
@@ -56,7 +60,11 @@ flowchart TD
     H -->|No| X
     H -->|Yes| I{"issuedAt before verifiedAt + windowMs?"}
     I -->|No| J["PasswordConfirmationStaleException; no row issued"]
-    I -->|Yes| K["Read live revision; delete this sign-in's spent/expired rows; insert and return id/expiry"]
+    I -->|Yes| K["Read live revision; delete this sign-in's spent/expired rows; insert and return id/expiry from callback"]
+    K --> Q{"Account Kit transaction outcome?"}
+    Q -->|Pre-commit failure| X
+    Q -->|Committed with follow-up error| O["Propagate Kit error; issued proof expires without delivered ID"]
+    Q -->|Success| Z["Return confirmation ID and expiry to caller"]
 ```
 
 **Code references:** [Entry/service and attempt reservation](../src/password_confirmations.ts), [request binding](../src/intent_hash.ts), [return and config types](../src/types.ts)
