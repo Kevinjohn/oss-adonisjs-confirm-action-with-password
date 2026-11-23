@@ -33,7 +33,8 @@ test.group('defineConfig', () => {
     assert.equal(config.windowMs, 5 * 60_000)
     assert.equal(config.table, 'password_confirmations')
     assert.equal(config.usersTable, 'users')
-    assert.isTrue(await config.authorize({} as never, {} as never))
+    // Left unset so the provider can tell a configured authorize from a registered one.
+    assert.isUndefined(config.authorize)
     assert.equal(defineConfig({ window: '90s' }).windowMs, 90_000)
     assert.equal(defineConfig({ window: 1000 }).windowMs, 1000)
     assert.deepEqual(config.throttle, {
@@ -91,7 +92,7 @@ test.group('defineConfig', () => {
     })
     assert.equal(absent.windowMs, 5 * 60_000)
     assert.equal(absent.table, 'password_confirmations')
-    assert.isTrue(await absent.authorize({} as never, {} as never))
+    assert.isUndefined(absent.authorize)
     assert.deepEqual(absent.throttle, defineConfig().throttle)
   })
 

@@ -140,6 +140,36 @@ authorize: async ({ account, trx }, { action, scope }) => {
 },
 ```
 
+`authorize` may come from the callback registry instead of the config file; set it in one place
+only, or resolving the service throws `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` naming `authorize`.
+
+### Registering callbacks from a provider
+
+A config file that imports application services runs that code whenever the config loads. Register
+`authorize` from your own provider's `boot()` instead; the factory runs once, when
+`PasswordConfirmations` is first resolved, and must be registered before then. List the provider
+before any provider whose `boot()` resolves this service.
+
+The generated `config/password_confirmations.ts` already sets `authorize`; delete that line when you
+register `authorize` here.
+
+```ts
+// providers/package_callbacks_provider.ts, listed in adonisrc.ts
+import type { ApplicationService } from '@adonisjs/core/types'
+
+export default class PackageCallbacksProvider {
+  constructor(protected app: ApplicationService) {}
+
+  async boot() {
+    const callbacks = await this.app.container.make('password_confirmations.callbacks')
+    callbacks.register(async () => {
+      const { authorizePasswordConfirmation } = await import('#services/password_confirmation')
+      return { authorize: authorizePasswordConfirmation }
+    })
+  }
+}
+```
+
 ### Browser example
 
 The [secure-note cookbook](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/blob/26c0d62053bd710a406cc362e883412c4cf13f4d/docs/cookbook/password-confirmation.md)

@@ -94,7 +94,8 @@ export interface PasswordConfirmationsConfig {
    * as masquerade, is not in the context: check it in the route before confirming and before
    * spending. Default allows; anything other than literal `true` refuses. Use
    * `context.trx` only, no side effects: it runs at both issuance stages, at spend, and again on a
-   * retry. Treat `request.intent` as read-only.
+   * retry. Treat `request.intent` as read-only. May instead come from
+   * `password_confirmations.callbacks`, but not from both.
    */
   authorize?: AuthorizeConfirmation
   /**
@@ -121,6 +122,13 @@ export interface ResolvedPasswordConfirmationsConfig {
   usersTable: string
   readPasswordHash?: PasswordConfirmationsConfig['readPasswordHash']
   verifyPassword?: PasswordConfirmationsConfig['verifyPassword']
-  authorize: AuthorizeConfirmation
+  /** Absent when not configured: the service then allows. */
+  authorize?: AuthorizeConfirmation
   throttle: false | ConfirmationThrottle
+}
+
+/** What the application registers through `password_confirmations.callbacks`. */
+export interface PasswordConfirmationCallbacks {
+  /** As `PasswordConfirmationsConfig.authorize`; set it in one place only. */
+  authorize?: AuthorizeConfirmation
 }

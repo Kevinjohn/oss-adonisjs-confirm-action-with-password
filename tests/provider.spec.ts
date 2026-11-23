@@ -25,6 +25,12 @@ test.group('provider and service', () => {
       assert.strictEqual(await fixture.app.container.make(PasswordConfirmations), fromContainer)
       const { default: service } = await import('../services/main.js')
       assert.strictEqual(service, fromContainer)
+      // Nothing configured and nothing registered: authorize still allows, as before.
+      await fixture.createUser('provider@x.test', 'pw-one-Original-7')
+      const input = await fixture.login('provider@x.test', 'pw-one-Original-7')
+      const request = { action: 'a', scope: 's', intent: {}, password: 'pw-one-Original-7' }
+      const issued = await fromContainer.confirmPassword(input, request)
+      assert.isString(issued.confirmationId)
     } finally {
       await fixture.close()
     }

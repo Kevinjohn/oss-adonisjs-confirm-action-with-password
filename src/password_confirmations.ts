@@ -93,7 +93,8 @@ export class PasswordConfirmations {
   async #assertConfirmationAllowed(context: KitContext, request: ConfirmationRequest) {
     // Host authorisation sees only what the confirmation binds: never the password or confirmation id.
     const { action, scope, intent } = request
-    if ((await this.#config.authorize(context, { action, scope, intent })) !== true) {
+    const authorize = this.#config.authorize ?? (async () => true)
+    if ((await authorize(context, { action, scope, intent })) !== true) {
       throw new PasswordConfirmationForbiddenException()
     }
   }
