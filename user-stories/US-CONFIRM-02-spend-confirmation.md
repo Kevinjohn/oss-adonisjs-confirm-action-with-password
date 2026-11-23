@@ -3,7 +3,7 @@
 As a signed-in account holder, I want the application to spend my confirmation with the exact operation it is bound to so that the proof cannot be reused or spent with a different change.
 
 **Status:** Current, through the same Account Kit `withCurrent` transaction.
-**Access:** A server-side session store is required (see [US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md)). The confirmation must belong to the current account and sign-in and match `action`, `scope`, canonical intent hash, live credential revision, and expiry. The host authorisation callback runs again; access to the resource is a host responsibility.
+**Access:** A server-side session store is required (see [US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md)). The confirmation must belong to the current account and sign-in and match `action`, `scope`, canonical intent hash, live credential revision, and expiry. If configured, the [host authorisation callback](US-CONFIRM-09-register-authorization.md) runs again. The host owns resource access.
 **Entry:** Host protected operation calls `withConfirmation(input, request, run)`, or calls `consume(context, request)` inside its own `withCurrent` callback.
 **Documentation:** [README use](../README.md#use)
 **Source:** [`withConfirmation` and `consume`](../src/password_confirmations.ts)
@@ -15,6 +15,7 @@ As a signed-in account holder, I want the application to spend my confirmation w
 - A matching live confirmation is marked consumed before `run`; the mark and host change share the Kit transaction.
 - A missing, expired, consumed, mismatched or revoked confirmation is rejected; rollback of `run` also rolls back the spend. A request that fails binding (invalid `action`, `scope` or `intent`, 400), has no registered sign-in, or fails host authorisation is refused before any row is updated.
 
+- If Kit reports `E_ACCOUNT_KIT_POST_COMMIT` with `committed === true`, the spend and transaction writes are already stored. The host checks the stored outcome before deciding how to respond. [README errors](../README.md#errors)
 - Both deadlines apply strictly. A larger configured window cannot extend the issued deadline and a shorter one applies immediately. Equality with either deadline refuses the spend. One conditional update must affect exactly one row, so competing callers cannot commit the same proof twice. `withConfirmation` returns the callback result and `consume` resolves without a value. The callback must write through `context.trx` for its changes to roll back with the spend.
 
 ## User flow
@@ -30,6 +31,7 @@ flowchart TD
     E --> F{"Transaction commits?"}
     F -->|No| G["Change and spend roll back"]
     F -->|Yes| H["Change commits; confirmation cannot be reused"]
+    H -->|Follow-up fails| I["Host checks stored outcome before responding"]
 ```
 
 ## Code flow
@@ -52,7 +54,10 @@ flowchart TD
     R -->|withConfirmation| F["run(context) in same trx"]
     R -->|consume| Y["Return to caller's callback; caller owns remaining writes"]
     Y --> G
-    F --> G["Kit transaction commits or rolls back spend and change"]
+    F --> G{"Kit transaction outcome?"}
+    G -->|Pre-commit failure| I["Roll back spend and protected writes"]
+    G -->|Commit and follow-up succeed| J["Return host result"]
+    G -->|Committed with follow-up error| K["Propagate Kit error; spend and protected writes remain stored"]
 ```
 
 **Code references:** [Methods](../src/password_confirmations.ts), [transaction context types](../src/types.ts)

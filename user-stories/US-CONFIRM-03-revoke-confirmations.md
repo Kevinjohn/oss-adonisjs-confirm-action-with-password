@@ -31,17 +31,18 @@ flowchart TD
 
 ## Code flow
 
-Scope: package service path; HTTP request validation, origin checks and response mapping remain host-owned.
+Scope: confirm refusal through the [Account Kit current-sign-in check](https://github.com/Kevinjohn/oss-adonisjs-account-kit/blob/becffc90271b79c3ce6d2c1dfe0e0b3e871a9fc8/src/authentication.ts#L269-L283) or the package spend condition. The [Account Kit lifecycle contract](../README.md#what-ends-a-confirmation) and linked tests identify the invalidation triggers.
 
 ```mermaid
 flowchart TD
     A["Account Kit lifecycle operation"] --> B["Kit invalidates session or advances credential state"]
-    B --> C{"Next withConfirmation calls withCurrent; live current input accepted?"}
+    B --> C{"Next withConfirmation calls authentication.withCurrent; live input accepted?"}
     C -->|No| G["Refuse invalid or revoked sign-in before consume"]
-    C -->|Yes| H["After spend checks, conditionally update eligible row using live revision and binding"]
-    H --> D{"Stored binding still matches?"}
+    C -->|Yes| H["consume checks sign-in, request and authorisation before reading live revision and updating the eligible row"]
+    H -->|Checks fail| J["Refuse before update"]
+    H --> D{"Exactly one eligible row updated?"}
     D -->|No| E["No matching row update; required error"]
-    D -->|Yes| F["Only an eligible matching row can be consumed"]
+    D -->|Yes| F["Continue the spending transaction as in US-CONFIRM-02"]
 ```
 
-**Code references:** [Spend check](../src/password_confirmations.ts), [revocation contract](../README.md#what-ends-a-confirmation), [revocation spec](../tests/revocation.spec.ts)
+**Code references:** [Spend check](../src/password_confirmations.ts#L276), [shared spend flow](US-CONFIRM-02-spend-confirmation.md#code-flow), [revocation contract](../README.md#what-ends-a-confirmation), [revocation spec](../tests/revocation.spec.ts)

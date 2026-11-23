@@ -1,6 +1,6 @@
 # User story catalogue
 
-Reviewed against `b3bafc464a6a9e3fa8a18cd2da6766cf9b0843cd` (0.3.2); a story changed since then was updated with the code it describes. The catalogue covers account-holder, host and release-maintainer journeys. Test links identify executable evidence.
+Reviewed against `9477dd0161e3f01da2cb6632832eb959a291425d` (0.4.0). The catalogue covers account-holder, host and release-maintainer journeys. Test links identify executable evidence.
 
 ## Index
 
@@ -14,6 +14,7 @@ Reviewed against `b3bafc464a6a9e3fa8a18cd2da6766cf9b0843cd` (0.3.2); a story cha
 | [US-CONFIRM-06](US-CONFIRM-06-recover-from-throttling.md)      | Recover from password-check throttling              | Current  |
 | [US-CONFIRM-07](US-CONFIRM-07-upgrade-confirmation-storage.md) | Upgrade existing confirmation storage               | Operator |
 | [US-CONFIRM-08](US-CONFIRM-08-verify-release-archive.md)       | Verify and release the candidate archive            | Operator |
+| [US-CONFIRM-09](US-CONFIRM-09-register-authorization.md)       | Configure operation authorisation                   | Operator |
 
 ## Files
 

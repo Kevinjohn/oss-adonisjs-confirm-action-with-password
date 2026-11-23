@@ -1,6 +1,6 @@
 # Capability coverage
 
-Indexed by user outcome. Linked stories identify the service methods, host responsibilities and test evidence for each path.
+Indexed by user outcome. Linked stories identify the service methods, host responsibilities and test evidence for each path. New marks a story added in this refresh.
 
 | Story                                                          | Operation                                                      | Access                                                                                   | Status   | Catalogue |
 | -------------------------------------------------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------- | --------- |
@@ -12,3 +12,4 @@ Indexed by user outcome. Linked stories identify the service methods, host respo
 | [US-CONFIRM-06](US-CONFIRM-06-recover-from-throttling.md)      | Recover from password-check throttling                         | The host uses the package limiter and exposes an exception handler.                      | Current  | Reviewed  |
 | [US-CONFIRM-07](US-CONFIRM-07-upgrade-confirmation-storage.md) | Upgrade existing confirmation storage                          | An existing host has already applied the 0.1.1 create migration.                         | Operator | Reviewed  |
 | [US-CONFIRM-08](US-CONFIRM-08-verify-release-archive.md)       | Verify and release the candidate archive                       | Release workflow dispatch on main and permission to create the prerelease.               | Operator | Reviewed  |
+| [US-CONFIRM-09](US-CONFIRM-09-register-authorization.md)       | Configure operation authorisation                              | Host developer who controls package config or provider boot                              | Operator | New       |
