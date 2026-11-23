@@ -43,9 +43,11 @@ flowchart TD
     B -->|No| X["Binding or account/permission failure; no proof"]
     B -->|Yes| C{"withCurrent stage 1 accepts current account, registered sign-in and authorize?"}
     C -->|No| X
-    C -->|Snapshot transaction post-commit error| X1["Propagate Kit error before verification"]
     C -->|Yes| S["Read password hash if account has password"]
-    S --> T{"Package throttle on?"}
+    S --> S1{"Snapshot transaction outcome?"}
+    S1 -->|Pre-commit failure| X
+    S1 -->|Committed with follow-up error| X1["Propagate Kit error before verification"]
+    S1 -->|Success| T{"Package throttle on?"}
     T -->|"No (throttle: false; host throttles in its own route)"| E["verify hash outside Kit transaction"]
     T -->|Yes| D{"reserveAttempt: block and budget allow?"}
     D -->|No| D2["Throttle refusal (429) or limiter fault; no hash run, no row issued"]
