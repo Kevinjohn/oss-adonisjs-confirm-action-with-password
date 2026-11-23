@@ -16,7 +16,7 @@ protected change. It proves recent password confirmation, not permission to acce
 | Need          | Detail                                                                                                                               |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Node.js       | 24 or later                                                                                                                          |
-| Account Kit   | exactly `0.5.1` for the live credential revision API (see below)                                                                     |
+| Account Kit   | exactly `0.5.2` for the live credential revision API (see below)                                                                     |
 | Sign-in       | Account Kit `authentication.strategy: 'session'` with `sessionManagement` enabled; access tokens give no sign-in row and are refused |
 | Session store | server-side (memory in tests, database or Redis); the cookie store keeps a copied session alive after sign-out                       |
 | Assembler     | `@adonisjs/assembler` 8.x in the host's development dependencies for the configure codemods                                          |
@@ -26,7 +26,7 @@ protected change. It proves recent password confirmation, not permission to acce
 ## Install
 
 ```sh
-pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.3.1/kevinjohn-adonisjs-confirm-action-with-password-0.3.1.tgz
+pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.3.2/kevinjohn-adonisjs-confirm-action-with-password-0.3.2.tgz
 node ace configure @kevinjohn/adonisjs-confirm-action-with-password   # --users-table, --user-id-type as for Account Kit
 node ace migration:run
 ```
@@ -58,7 +58,7 @@ disagrees with them. After an interrupted or changed setup, check three things:
 
 ## User stories
 
-See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.3.1/user-stories/README.md) for the source-reviewed capabilities and boundaries.
+See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.3.2/user-stories/README.md) for the source-reviewed capabilities and boundaries.
 
 ## Use
 
@@ -317,7 +317,7 @@ confirm again, and the orphan expires on its own. Every other error rolled back.
 
 ## What ends a confirmation
 
-Every Account Kit 0.5.1 path below is tested to kill an outstanding confirmation, and a spend already in
+Every Account Kit 0.5.2 path below is tested to kill an outstanding confirmation, and a spend already in
 progress commits before the revocation acquires its connection in the single-connection SQLite fixture:
 password change (keeping or ending this sign-in), password reset, sign-out, `sessions.revoke`,
 `revokeOthers`, `revokeAll`, `changeRestriction`, a completed email change, account deletion,
