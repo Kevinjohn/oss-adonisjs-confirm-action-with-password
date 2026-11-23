@@ -25,7 +25,10 @@ export interface PasswordConfirmationsDependencies {
   now?: () => number
 }
 
-/** The context Account Kit provides to an active `authentication.withCurrent` callback. */
+/**
+ * The context Account Kit provides to an active `authentication.withCurrent` callback. Never
+ * construct one.
+ */
 export type KitContext = CurrentAccountContext
 
 /** The operation a password confirmation is bound to, not a grant of resource permission. */
