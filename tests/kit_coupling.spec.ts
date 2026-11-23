@@ -20,7 +20,7 @@ const KIT_READS = {
   users: ['id', 'password'],
   account_sessions: ['id', 'user_id', 'handle_hash'],
 }
-const SUPPORTED_KIT = '0.5.2'
+const SUPPORTED_KIT = '0.6.0'
 
 let fixture: Fixture
 
