@@ -9,6 +9,23 @@
 
 import { test } from '@japa/runner'
 import { defineConfig } from '../src/define_config.js'
+import { InvalidPasswordConfirmationsConfigException } from '../src/errors.js'
+
+/** Runs `defineConfig` with a value its types forbid, as an untyped host config would. */
+function defineUntyped(config: unknown) {
+  return defineConfig(config as never)
+}
+
+/** The configuration exception `defineUntyped(config)` throws. */
+function refusal(config: unknown) {
+  try {
+    defineUntyped(config)
+  } catch (error) {
+    if (error instanceof InvalidPasswordConfirmationsConfigException) return error
+    throw error
+  }
+  throw new Error('defineConfig accepted the config')
+}
 
 test.group('defineConfig', () => {
   test('defaults to a five-minute window and the standard tables', async ({ assert }) => {
@@ -52,5 +69,68 @@ test.group('defineConfig', () => {
       duration: 30,
       blockDuration: '1s',
     })
+  })
+
+  test('accepts valid callbacks, throttle false and absent values as defaults', async ({
+    assert,
+  }) => {
+    const authorize = async () => false
+    const verifyPassword = async () => true
+    const readPasswordHash = async () => null
+    const config = defineConfig({ authorize, verifyPassword, readPasswordHash, throttle: false })
+    assert.strictEqual(config.authorize, authorize)
+    assert.strictEqual(config.verifyPassword, verifyPassword)
+    assert.strictEqual(config.readPasswordHash, readPasswordHash)
+    assert.isFalse(config.throttle)
+    const absent = defineUntyped({
+      window: null,
+      table: null,
+      usersTable: null,
+      authorize: null,
+      throttle: null,
+    })
+    assert.equal(absent.windowMs, 5 * 60_000)
+    assert.equal(absent.table, 'password_confirmations')
+    assert.isTrue(await absent.authorize({} as never, {} as never))
+    assert.deepEqual(absent.throttle, defineConfig().throttle)
+  })
+
+  test('refuses a config that is not an object', ({ assert }) => {
+    assert.match(refusal(null).message, /the config must be an object/)
+  })
+
+  test('refuses table names that are not strings', ({ assert }) => {
+    // An array holding a valid name would pass a coercing identifier check.
+    assert.match(refusal({ table: ['password_confirmations'] }).message, /table must be a plain/)
+    assert.match(refusal({ usersTable: ['users'] }).message, /usersTable must be a plain/)
+  })
+
+  test('refuses callbacks that are not functions', ({ assert }) => {
+    assert.match(refusal({ authorize: true }).message, /authorize must be a function/)
+    assert.match(refusal({ verifyPassword: 'bcrypt' }).message, /verifyPassword must be a function/)
+    assert.match(refusal({ readPasswordHash: {} }).message, /readPasswordHash must be a function/)
+  })
+
+  test('refuses a throttle that is neither an object nor false', ({ assert }) => {
+    for (const throttle of [true, 'off', 5, []]) {
+      assert.match(refusal({ throttle }).message, /throttle must be an object or false/)
+    }
+  })
+
+  test('keeps the duration parser error as the cause', ({ assert }) => {
+    for (const [config, field] of [
+      [{ window: 'soon' }, /window must be a positive duration/],
+      [{ throttle: { duration: 'soon' } }, /throttle\.duration must be/],
+      [{ throttle: { blockDuration: 'soon' } }, /throttle\.blockDuration must be/],
+    ] as const) {
+      const error = refusal(config)
+      assert.match(error.message, field)
+      assert.instanceOf(error.cause, Error)
+      assert.match((error.cause as Error).message, /Invalid duration expression "soon"/)
+    }
+    // A parsed value below the minimum keeps the range error, with no parser cause.
+    const tooShort = refusal({ throttle: { duration: '1ms' } })
+    assert.match(tooShort.message, /throttle\.duration must be a duration of at least one second/)
+    assert.isUndefined(tooShort.cause)
   })
 })

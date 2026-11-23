@@ -1,10 +1,10 @@
 # User story catalogue
 
-Reviewed against `5bea3e4a3aaf2435bbc2ee18c8f0f8664544f01e`. The catalogue covers account-holder, host and release-maintainer journeys. Test links identify executable evidence.
+Reviewed against `b3bafc464a6a9e3fa8a18cd2da6766cf9b0843cd` (0.3.2); a story changed since then was updated with the code it describes. The catalogue covers account-holder, host and release-maintainer journeys. Test links identify executable evidence.
 
 ## Index
 
-| Story                                                          | Action                                              | Status   |
+| Story                                                          | Operation                                           | Status   |
 | -------------------------------------------------------------- | --------------------------------------------------- | -------- |
 | [US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md)           | Issue a confirmation after re-entering the password | Current  |
 | [US-CONFIRM-02](US-CONFIRM-02-spend-confirmation.md)           | Spend a confirmation with the sensitive change      | Current  |

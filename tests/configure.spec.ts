@@ -20,7 +20,10 @@ import { bootFixture, prepareConfiguredAppRoot } from './helpers.js'
 /** Lightweight command for inspection-only failures: no host packages or codemods are needed. */
 function inspectionCommand(root: string, database?: unknown) {
   const warnings: string[] = []
+  const errors: string[] = []
   const migrations: string[] = []
+  const stubs: string[] = []
+  const providers: string[] = []
   const command = {
     app: {
       config: database === undefined ? undefined : { get: () => database },
@@ -30,19 +33,26 @@ function inspectionCommand(root: string, database?: unknown) {
       import: (specifier: string) => import(specifier),
     },
     parsedFlags: {},
-    logger: { warning: (message: string) => warnings.push(message), info: () => {} },
+    logger: {
+      warning: (message: string) => warnings.push(message),
+      logError: (message: string) => errors.push(message),
+      info: () => {},
+    },
     createCodemods: async () => ({
       makeUsingStub: async (
         _root: string,
-        _stub: string,
+        stub: string,
         data: { migration?: { destination: string } }
       ) => {
+        stubs.push(stub)
         if (data.migration) migrations.push(data.migration.destination)
       },
-      updateRcFile: async () => {},
+      updateRcFile: async (callback: (rcFile: { addProvider: (path: string) => void }) => void) => {
+        callback({ addProvider: (path) => providers.push(path) })
+      },
     }),
   } as unknown as Configure
-  return { command, warnings, migrations }
+  return { command, warnings, errors, migrations, stubs, providers }
 }
 
 test.group('configure', () => {
@@ -184,6 +194,36 @@ test.group('configure', () => {
     }
   }).timeout(30_000)
 
+  test('a rerun against a config relying on the default table names does not warn', async ({
+    assert,
+  }) => {
+    const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
+    try {
+      await mkdir(join(root, 'config'))
+      const config = join(root, 'config/password_confirmations.ts')
+      await writeFile(config, `export default defineConfig({})\n`)
+      const { command, warnings } = inspectionCommand(root)
+      await configure(command)
+      assert.notMatch(warnings.join('\n'), /does not match/)
+
+      // An absent key still disagrees with a flag that is not its default.
+      const flagged = inspectionCommand(root)
+      ;(flagged.command.parsedFlags as Record<string, string>)['users-table'] = 'members'
+      await configure(flagged.command)
+      assert.match(
+        flagged.warnings.join('\n'),
+        /password_confirmations\.ts already exists and does not match/
+      )
+      // A key naming another table still disagrees with the default.
+      await writeFile(config, `export default defineConfig({ table: 'other_confirmations' })\n`)
+      const named = inspectionCommand(root)
+      await configure(named.command)
+      assert.match(named.warnings.join('\n'), /does not match/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test('the migration sorts after an Account Kit migration dated ahead of the clock', async ({
     assert,
   }) => {
@@ -320,15 +360,60 @@ test.group('configure', () => {
     }
   }).timeout(30_000)
 
-  test('refuses ambiguous migration directories before generating files', async ({ assert }) => {
+  test('with several migration paths, writes config and provider but refuses to place the migration', async ({
+    assert,
+  }) => {
     const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
     try {
-      const { command, migrations } = inspectionCommand(root, {
+      const { command, migrations, stubs, providers, errors } = inspectionCommand(root, {
         connection: 'primary',
         connections: { primary: { migrations: { paths: ['one', 'two'] } } },
       })
-      await assert.rejects(() => configure(command), /multiple migration paths/)
+      await configure(command)
+      assert.deepEqual(stubs, ['config/password_confirmations.stub'])
+      assert.deepEqual(providers, [
+        '@kevinjohn/adonisjs-confirm-action-with-password/password_confirmations_provider',
+      ])
       assert.lengthOf(migrations, 0)
+      assert.equal(command.exitCode, 1)
+      assert.lengthOf(errors, 1)
+      assert.match(errors[0], /multiple migration paths/)
+      assert.include(errors[0], join('migrations', 'create_password_confirmations_table.stub'))
+
+      // A confirmations migration installed by hand in any of the paths ends the refusal.
+      await mkdir(join(root, 'two'))
+      await writeFile(join(root, 'two/1000000000000_create_password_confirmations_table.ts'), '')
+      const rerun = inspectionCommand(root, {
+        connection: 'primary',
+        connections: { primary: { migrations: { paths: ['one', 'two'] } } },
+      })
+      await configure(rerun.command)
+      assert.deepEqual(rerun.stubs, ['config/password_confirmations.stub'])
+      assert.lengthOf(rerun.providers, 1)
+      assert.lengthOf(rerun.errors, 0)
+      assert.isUndefined(rerun.command.exitCode)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  test('writes config and provider but refuses a migration that would sort too early', async ({
+    assert,
+  }) => {
+    const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
+    try {
+      const directory = join(root, 'host/migrations')
+      await mkdir(directory, { recursive: true })
+      // Without natural sorting a clock-dated name sorts before `9_...`.
+      await writeFile(join(directory, '9_account_kit_create_account_sessions.ts'), '')
+      const { command, migrations, stubs, providers, errors } = inspectionCommand(root)
+      await configure(command)
+      assert.deepEqual(stubs, ['config/password_confirmations.stub'])
+      assert.lengthOf(providers, 1)
+      assert.lengthOf(migrations, 0)
+      assert.equal(command.exitCode, 1)
+      assert.lengthOf(errors, 1)
+      assert.match(errors[0], /cannot safely place a migration/)
     } finally {
       await rm(root, { recursive: true, force: true })
     }

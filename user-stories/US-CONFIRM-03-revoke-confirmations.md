@@ -15,7 +15,7 @@ As an account holder, I want confirmations tied to my current sign-in and creden
 - Spending requires the live credential revision and same live sign-in; otherwise the service refuses before or during confirmation consumption. Recover with an eligible sign-in, then fresh password confirmation; a deleted account cannot issue new proof.
 - Social unlink and registration claim share Kit invalidation paths but are called out as not directly driven by tests in the README.
 
-- A custom guard passes the current account input on logout and the previous session handle on replacement. Omitting them can leave a live registry row and its proof until expiry or revision change. The single-connection SQLite fixture also exercises a spend that starts before revocation and commits first. [Host guard contract](../README.md#what-ends-a-confirmation)
+- A custom guard passes the current account input on sign-out and the previous session handle on replacement. Omitting them can leave a live registry row and its proof until expiry or revision change. The single-connection SQLite fixture also exercises a spend that starts before revocation and commits first. [Host guard contract](../README.md#what-ends-a-confirmation)
 
 ## User flow
 
@@ -38,7 +38,7 @@ flowchart TD
     A["Account Kit lifecycle operation"] --> B["Kit invalidates session or advances credential state"]
     B --> C{"Next withConfirmation calls withCurrent; live current input accepted?"}
     C -->|No| G["Refuse invalid or revoked sign-in before consume"]
-    C -->|Yes| H["After consume guards, conditionally update eligible row using live revision and binding"]
+    C -->|Yes| H["After spend checks, conditionally update eligible row using live revision and binding"]
     H --> D{"Stored binding still matches?"}
     D -->|No| E["No matching row update; required error"]
     D -->|Yes| F["Only an eligible matching row can be consumed"]

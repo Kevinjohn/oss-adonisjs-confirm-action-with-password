@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+- Correction to 0.2.2: that release also changed the public `KitContext` type to Account Kit's
+  `CurrentAccountContext`, and the service calls `readCredentialRevision()` on it. A host that
+  builds the context itself instead of passing the one `withCurrent` gives gets a compile error, or
+  a failure at spend when untyped. Never construct one.
+- Configure that cannot place the migration (several migration paths, or a new file that would
+  not sort last) now still writes the config and registers the provider, skips the migration, logs
+  the refusal with the stub path and exits with code 1. With several paths it first looks for an
+  existing confirmations migration in all of them. The README documents the manual migration.
+- A configure rerun no longer warns that a config relying on the default table names does not
+  match the default flags.
+- `defineConfig` refuses wrong JavaScript types when the config is defined rather than at first
+  use: a config that is not an object, table names that are not strings, callbacks that are not
+  functions and a `throttle` that is neither an object nor `false`, each with
+  `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` naming the key. Absent options keep their defaults; a
+  duration that fails to parse keeps the parser's error as `cause`.
+  Behaviour change for untyped configs: a `throttle` of `true` or another non-object value, an
+  array `throttle`, and a falsy `readPasswordHash` such as `false` previously ran with the defaults
+  and now stop the application at load. The published types already forbid these values.
+
 ## 0.3.2 - 2026-11-23
 
 - Require Account Kit 0.5.2.

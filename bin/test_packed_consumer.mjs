@@ -10,7 +10,8 @@ const tarball = await realpath(resolve(process.argv[2] ?? ''))
 const manifest = JSON.parse(await readFile(join(repository, 'package.json'), 'utf8'))
 if (!tarball.endsWith('.tgz')) throw new Error('Pass the exact candidate .tgz archive')
 
-// Use independent, explicit host dependencies, matching the source suite's tested peer versions.
+// Use independent, explicit host dependencies, matching the source suite's tested peer versions
+// (tests/tooling/packed_consumer_pins.spec.ts compares them with pnpm-lock.yaml).
 // Keep the released Account Kit archive: its package is not published to npm.
 const hostDependencies = {
   '@adonisjs/assembler': '8.6.0',

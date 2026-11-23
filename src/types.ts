@@ -25,7 +25,10 @@ export interface PasswordConfirmationsDependencies {
   now?: () => number
 }
 
-/** The context Account Kit provides to an active `authentication.withCurrent` callback. */
+/**
+ * The context Account Kit provides to an active `authentication.withCurrent` callback. Never
+ * construct one.
+ */
 export type KitContext = CurrentAccountContext
 
 /** The operation a password confirmation is bound to, not a grant of resource permission. */
@@ -86,8 +89,10 @@ export interface PasswordConfirmationsConfig {
    */
   verifyPassword?: (hashed: string, password: string) => Promise<boolean>
   /**
-   * Host authorisation callback such as "only the owner, never while masquerading". Default
-   * allows; anything other than literal `true` refuses. Use
+   * Host authorisation callback that the account context and request can answer, such as "only
+   * the resource owner" or "only an account with the operation's role". Request-bound state, such
+   * as masquerade, is not in the context: check it in the route before confirming and before
+   * spending. Default allows; anything other than literal `true` refuses. Use
    * `context.trx` only, no side effects: it runs at both issuance stages, at spend, and again on a
    * retry. Treat `request.intent` as read-only.
    */

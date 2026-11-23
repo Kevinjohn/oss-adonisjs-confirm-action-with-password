@@ -19,7 +19,7 @@ As an application operator, I want to install the provider and storage so that c
 | `--user-id-type` | CLI option | Optional; `integer` (default), `string` or `uuid`; selects the generated migration's user ID column type.         |
 | `--table`        | CLI option | Optional; defaults to `password_confirmations`; must be a plain SQL identifier matching `[A-Za-z_][A-Za-z0-9_]*`. |
 
-- Configure writes config, migration and provider without overwriting files; invalid option values, ambiguous primary migration paths and non-missing inspection failures prevent those writes. It uses the primary Lucid connection's single migration path or AdonisJS's migration directory if not set. It preserves existing Lucid migration identities, including nested paths. A new migration goes next to the last Lucid-discoverable migration and must sort after it. If that is unsafe, configure stops before writing and asks the operator to install the stub manually. If Lucid has no Account Kit `account_sessions` migration, configure logs a warning and continues. Interrupted writes remain recoverable using the [setup guidance](../README.md#install).
+- Configure writes config, migration and provider without overwriting files; invalid option values and non-missing inspection failures prevent those writes. It uses the primary Lucid connection's single migration path or AdonisJS's migration directory if not set. With multiple primary migration paths it looks for an existing confirmations migration in all of them. It preserves existing Lucid migration identities, including nested paths. A new migration goes next to the last Lucid-discoverable migration and must sort after it. If the paths are ambiguous with no existing migration, or the placement is unsafe, configure still writes the config and provider, skips the migration, logs an error naming the stub and exits with code 1 so the operator installs it manually ([manual migration](../README.md#install-the-migration-manually)). If Lucid has no Account Kit `account_sessions` migration, configure logs a warning and continues. Interrupted writes remain recoverable using the [setup guidance](../README.md#install).
 - `config/password_confirmations.ts` (`defineConfig`) accepts these options:
 
 | Option             | Control                | Required/default/conditions                                                                                                                                                                                                           |
@@ -32,11 +32,12 @@ As an application operator, I want to install the provider and storage so that c
 | `authorize`        | Callback               | Optional; receives context and `{ action, scope, intent }` only; default allows every request; anything other than `true` refuses.                                                                                                    |
 | `throttle`         | Object or `false`      | Optional; defaults 5 `requests`, `duration` `'1 minute'`, `blockDuration` `'20 minutes'`; `requests` must be a positive safe integer and each duration must parse to a positive safe-integer number of seconds; `false` turns it off. |
 
+- `defineConfig` refuses wrong JavaScript types when the config loads, with `InvalidPasswordConfirmationsConfigException` naming the key: a config that is not an object, table names that are not strings, callbacks that are not functions and a `throttle` that is neither an object nor `false`. An absent (`undefined` or `null`) option takes its default. A duration that fails to parse keeps the parser's error as `cause`. [Config validation](../src/define_config.ts) · [Spec](../tests/define_config.spec.ts)
 - Throttling needs `@adonisjs/limiter` registered unless `throttle` is `false`; otherwise constructing the service fails with `InvalidPasswordConfirmationsConfigException`. The provider also refuses a config object without `windowMs`.
 - The provider binds the package service to Account Kit, Lucid and application hash/limiter dependencies. HTTP routes, origin checks and response mapping remain host-owned.
 - Custom `readPasswordHash` and `authorize` callbacks use only their supplied transaction and avoid side effects: Account Kit may retry them. Authorisation treats the intent as read-only.
 
-- A host using string user IDs can add its own foreign key and cascade policy for resource scope. The host compatibility fixture checks isolation across scopes and continued spending on the surviving scope. The package leaves resource ownership and authorisation to the host. [Host compatibility](../tests/host_compatibility.spec.ts)
+- A host using string user IDs can add its own foreign key and cascade rules for resource scope. The host compatibility fixture checks isolation across scopes and continued spending on the surviving scope. The package leaves resource ownership and authorisation to the host. [Host compatibility](../tests/host_compatibility.spec.ts)
 
 ## User flow
 
@@ -47,7 +48,7 @@ flowchart TD
     K -->|No| Q["Resolve flagged options, paths or existing files; retry"]
     Q --> B
     K -->|Yes| M["Run migrations"]
-    M --> C["Implement host callbacks and origin/throttle policy"]
+    M --> C["Implement host callbacks and origin and throttle rules"]
     C --> D["Feature is ready for host routes"]
 ```
 
@@ -59,9 +60,12 @@ Scope: setup path; HTTP request validation, origin checks and response mapping r
 flowchart TD
     A["configure(command) reads storage flags and defaults"] --> B{"Identifiers and user ID type valid?"}
     B -->|No| C["Report invalid flags and write no files"]
-    B -->|Yes| R{"Unambiguous Lucid inventory and safe migration destination?"}
+    B -->|Yes| R{"Lucid inventory readable and at most one confirmations migration?"}
     R -->|No| R2["Report ambiguity or inspection path; no writes"]
-    R -->|Yes| W["Warn if existing config or migration differs from flags"]
+    R -->|Yes| S{"Existing migration, or one path and a safe destination?"}
+    S -->|No| S2["Log refusal naming the stub; exit code 1; skip the migration"]
+    S -->|Yes| W["Warn if existing config or migration differs from flags"]
+    S2 --> W
     W --> D["Write config only when absent"]
     D --> B2{"Account Kit sessions migration present?"}
     B2 -->|No| B3["Log warning; continue"]
@@ -71,7 +75,7 @@ flowchart TD
     N -->|No| M["Write migration next to, and ordered after, the last Lucid entry"]
     P --> E
     M --> E["Register provider"]
-    E --> F{"At app configuration load, defineConfig validates window, identifiers and throttle?"}
+    E --> F{"At app configuration load, defineConfig validates option types, window, identifiers and throttle?"}
     F -->|No| G2
     F -->|Yes| G{"On singleton resolution, config has windowMs, and limiter registered unless throttle is false?"}
     G -->|No| G2["InvalidPasswordConfirmationsConfigException; service not constructed"]

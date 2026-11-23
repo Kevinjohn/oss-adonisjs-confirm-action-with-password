@@ -38,8 +38,11 @@ confirm their password again.
 
 `configure` writes `config/password_confirmations.ts`, one migration and registers the provider. It uses
 the primary Lucid connection's single configured migration path, or AdonisJS's migration directory
-(`database/migrations` by default) if no path is set. With multiple migration paths, configure refuses
-to guess: install the stub manually after Account Kit's migrations, or configure a single path first.
+(`database/migrations` by default) if no path is set. With multiple migration paths it looks for an
+existing confirmations migration in all of them; if there is none, it refuses to guess. When it
+cannot place the migration (multiple paths, or a new file that would not sort after the last
+existing migration), it still writes the config and registers the provider, skips the migration,
+logs an error and exits with code 1: [install the migration manually](#install-the-migration-manually).
 It reports inspection failures with the affected path. It never
 overwrites existing files, so a rerun does not apply new flags; it warns when a file it kept
 disagrees with them. After an interrupted or changed setup, check three things:
@@ -55,6 +58,27 @@ disagrees with them. After an interrupted or changed setup, check three things:
 3. `adonisrc.ts` lists
    `@kevinjohn/adonisjs-confirm-action-with-password/password_confirmations_provider`. Without
    `@adonisjs/assembler`, configure warns and does not add it; add the line by hand.
+
+### Install the migration manually
+
+Copy
+`node_modules/@kevinjohn/adonisjs-confirm-action-with-password/build/stubs/migrations/create_password_confirmations_table.stub`
+to a file named `<timestamp>_create_password_confirmations_table.ts` in a migration directory where it
+sorts after `*_account_kit_create_account_sessions.ts`. Delete the leading `{{{ exports(...) }}}`
+block and replace the three values:
+
+| Placeholder                      | Value                                                                                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `{{{ migration.userIdColumn }}}` | the user id column: `table.integer('user_id').unsigned()`, `table.string('user_id', 254)` or `table.uuid('user_id')` |
+| `{{{ migration.tableName }}}`    | the confirmations table, the same as `table` in the config (default `password_confirmations`)                        |
+| `{{{ migration.usersTable }}}`   | the users table, the same as `usersTable` in the config (default `users`)                                            |
+
+Then rerun configure: it finds the migration in any configured path and leaves it alone.
+
+Configure recognises an existing confirmations migration by its file name only
+(`*_create_password_confirmations_table`). A host that renamed the migration or merged it into
+another (a consolidated baseline, for example) must not rerun configure: it would find none and
+write a second migration creating the same table, which then fails when it runs.
 
 ## User stories
 
@@ -118,11 +142,12 @@ authorize: async ({ account, trx }, { action, scope }) => {
 
 ### Browser example
 
-The [secure-note cookbook](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/blob/a8533cdd4192e98a516d60f971639ea2448d99d2/docs/cookbook/password-confirmation.md)
-shows the complete two-step journey with Account Kit 0.4.2 and Password Confirmations 0.2.2:
-[Hypermedia](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/a8533cdd4192e98a516d60f971639ea2448d99d2/apps/hypermedia),
-[Inertia React](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/a8533cdd4192e98a516d60f971639ea2448d99d2/apps/inertia-react)
-and [Inertia Vue](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/a8533cdd4192e98a516d60f971639ea2448d99d2/apps/inertia-vue).
+The [secure-note cookbook](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/blob/26c0d62053bd710a406cc362e883412c4cf13f4d/docs/cookbook/password-confirmation.md)
+shows the complete two-step journey with Account Kit 0.5.1 and Password Confirmations 0.3.1 (no
+example revision pins 0.5.2 and 0.3.2 yet):
+[Hypermedia](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/hypermedia),
+[Inertia React](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/inertia-react)
+and [Inertia Vue](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/inertia-vue).
 Each validates the request, obtains the managed guard's current account input, rejects active
 masquerade and checks its pending note before consuming the proof with the write. The host owns
 request validation, resource checks, same-origin/CSRF protection, routes and response rendering.
@@ -154,7 +179,7 @@ yourself is not checked against the sign-in or the account lock, and the guarant
   `withConfirmation`, and do not change it in `authorize` or `run`: the confirmation binds the
   value as it was when the call started.
 - Keep it small: ids and amounts, not documents. It is sorted, serialised and hashed
-  synchronously on every call, at spend inside the account lock. For a bulk action bind a digest:
+  synchronously on every call, at spend inside the account lock. For a bulk operation bind a digest:
   `{ importId, sha256, rows }`.
 
 ## Rules the host must keep
@@ -284,7 +309,7 @@ changes.
 | `E_PASSWORD_CONFIRMATION_THROTTLED`                 | 429    | Too many wrong passwords; `retryAfterSeconds` says when to retry            |
 | `E_PASSWORD_CONFIRMATION_STALE`                     | 403    | The window passed between the password check and issue                      |
 | `E_PASSWORD_CONFIRMATION_FORBIDDEN`                 | 403    | Host authorisation callback did not return literal `true`                   |
-| `E_PASSWORD_CONFIRMATION_INVALID_REQUEST`           | 400    | Malformed action, scope or intent (JSON values only)                        |
+| `E_PASSWORD_CONFIRMATION_INVALID_REQUEST`           | 400    | Malformed `action`, `scope` or `intent` (JSON values only)                  |
 | `E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED` | 500    | No Kit sign-in row: wrong strategy or `sessionManagement` off               |
 | `E_PASSWORD_CONFIRMATION_INVALID_CONFIG`            | 500    | `config/password_confirmations.ts` missing or invalid                       |
 
@@ -311,7 +336,7 @@ export default class HttpExceptionHandler extends ExceptionHandler {
 
 `E_ACCOUNT_KIT_POST_COMMIT` (`error.committed === true`) also passes through. The transaction
 committed before it was thrown: from `withConfirmation` the confirmation is spent and your `run`
-writes are stored, so do not ask for a new confirmation and repeat the action; check what was
+writes are stored, so do not ask for a new confirmation and repeat the operation; check what was
 stored. From `confirmPassword` a confirmation was issued but its id was lost: ask the user to
 confirm again, and the orphan expires on its own. Every other error rolled back.
 
