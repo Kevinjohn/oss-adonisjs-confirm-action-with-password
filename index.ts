@@ -12,6 +12,7 @@ export * as errors from './src/errors.js'
 export { configure, stubsRoot } from './configure.js'
 export { defineConfig } from './src/define_config.js'
 export { PasswordConfirmations } from './src/password_confirmations.js'
+export { PasswordConfirmationCallbackRegistry } from './src/callback_registry.js'
 export type { PasswordConfirmationsDependencies } from './src/password_confirmations.js'
 export {
   PasswordConfirmationRequiredException,

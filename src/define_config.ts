@@ -93,7 +93,7 @@ export function defineConfig(
     usersTable,
     readPasswordHash: config.readPasswordHash,
     verifyPassword: config.verifyPassword,
-    authorize: config.authorize ?? (async () => true),
+    authorize: config.authorize ?? undefined,
     throttle: resolveThrottle(config.throttle),
   }
 }

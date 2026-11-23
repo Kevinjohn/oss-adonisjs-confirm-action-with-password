@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- `authorize` can be registered from an application provider through the
+  `password_confirmations.callbacks` container binding (`PasswordConfirmationCallbackRegistry`,
+  `register(factory)`), so the config file need not import application code. Setting it in both the
+  config and the registry throws `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` naming `authorize`; a
+  second registration, or one after the service is first resolved, throws the same error. With
+  neither, confirmations still allow.
+  Type change: `defineConfig` now leaves `authorize` unset when it is not given, so
+  `ResolvedPasswordConfirmationsConfig.authorize` is optional. A `PasswordConfirmations` built
+  directly from such a config still allows.
+
 ## 0.3.3 - 2026-11-23
 
 - Correction to 0.2.2: that release also changed the public `KitContext` type to Account Kit's
