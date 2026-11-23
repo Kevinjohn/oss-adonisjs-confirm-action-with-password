@@ -150,6 +150,9 @@ A config file that imports application services runs that code whenever the conf
 `PasswordConfirmations` is first resolved, and must be registered before then. List the provider
 before any provider whose `boot()` resolves this service.
 
+The generated `config/password_confirmations.ts` already sets `authorize`; delete that line when you
+register `authorize` here.
+
 ```ts
 // providers/package_callbacks_provider.ts, listed in adonisrc.ts
 import type { ApplicationService } from '@adonisjs/core/types'
