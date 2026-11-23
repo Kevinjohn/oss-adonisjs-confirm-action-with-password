@@ -75,6 +75,11 @@ block and replace the three values:
 
 Then rerun configure: it finds the migration in any configured path and leaves it alone.
 
+Configure recognises an existing confirmations migration by its file name only
+(`*_create_password_confirmations_table`). A host that renamed the migration or merged it into
+another (a consolidated baseline, for example) must not rerun configure: it would find none and
+write a second migration creating the same table, which then fails when it runs.
+
 ## User stories
 
 See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.3.2/user-stories/README.md) for the source-reviewed capabilities and boundaries.

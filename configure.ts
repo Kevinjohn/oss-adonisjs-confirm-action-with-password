@@ -183,17 +183,29 @@ export async function configure(command: Configure) {
   const codemods = await command.createCodemods()
   codemods.overwriteExisting = false
   // Existing files are never rewritten, so a rerun with other flags must say what it left alone.
-  const warnIfExistingConfigDiffers = async (path: string, expectedSnippets: string[]) => {
+  const warnIfExistingConfigDiffers = async (
+    path: string,
+    expected: Array<string | ((source: string) => boolean)>
+  ) => {
     const source = await inspect(path, () => readFile(path, 'utf8'))
-    if (source !== undefined && !expectedSnippets.every((text) => source.includes(text))) {
+    if (
+      source !== undefined &&
+      !expected.every((check) =>
+        typeof check === 'string' ? source.includes(check) : check(source)
+      )
+    ) {
       command.logger.warning(
         `password_confirmations: ${path} already exists and does not match --table ${tableName} / --users-table ${usersTable} / --user-id-type ${userIdType}; it was left unchanged`
       )
     }
   }
+  // `defineConfig` fills in an absent key with its default, so absence matches the default flag.
+  const configKey = (key: string, value: string, fallback: string) => (source: string) =>
+    source.includes(`${key}: '${value}'`) ||
+    (value === fallback && !new RegExp(`\\b${key}\\s*:`).test(source))
   await warnIfExistingConfigDiffers(command.app.configPath('password_confirmations.ts'), [
-    `table: '${tableName}'`,
-    `usersTable: '${usersTable}'`,
+    configKey('table', tableName, 'password_confirmations'),
+    configKey('usersTable', usersTable, 'users'),
   ])
   if (existingConfirmationMigration) {
     await warnIfExistingConfigDiffers(pathOf(existingConfirmationMigration), [

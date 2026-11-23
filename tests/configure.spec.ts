@@ -194,6 +194,36 @@ test.group('configure', () => {
     }
   }).timeout(30_000)
 
+  test('a rerun against a config relying on the default table names does not warn', async ({
+    assert,
+  }) => {
+    const root = await mkdtemp(join(tmpdir(), 'confirm-inspect-'))
+    try {
+      await mkdir(join(root, 'config'))
+      const config = join(root, 'config/password_confirmations.ts')
+      await writeFile(config, `export default defineConfig({})\n`)
+      const { command, warnings } = inspectionCommand(root)
+      await configure(command)
+      assert.notMatch(warnings.join('\n'), /does not match/)
+
+      // An absent key still disagrees with a flag that is not its default.
+      const flagged = inspectionCommand(root)
+      ;(flagged.command.parsedFlags as Record<string, string>)['users-table'] = 'members'
+      await configure(flagged.command)
+      assert.match(
+        flagged.warnings.join('\n'),
+        /password_confirmations\.ts already exists and does not match/
+      )
+      // A key naming another table still disagrees with the default.
+      await writeFile(config, `export default defineConfig({ table: 'other_confirmations' })\n`)
+      const named = inspectionCommand(root)
+      await configure(named.command)
+      assert.match(named.warnings.join('\n'), /does not match/)
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   test('the migration sorts after an Account Kit migration dated ahead of the clock', async ({
     assert,
   }) => {
