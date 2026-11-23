@@ -69,7 +69,7 @@ async function migrationSettings(command: Configure) {
         throw new RuntimeException(`password_confirmations: invalid database config in ${path}`)
     }
   }
-  if (!database) return { directory: app.migrationsPath(), naturalSort: false }
+  if (!database) return { directories: [app.migrationsPath()], naturalSort: false }
   const connection = database.connections?.[database.connection]
   if (!connection) {
     throw new RuntimeException('password_confirmations: config/database has no primary connection')
@@ -80,14 +80,10 @@ async function migrationSettings(command: Configure) {
       'password_confirmations: config/database migrations.paths must contain directory names'
     )
   }
-  if (paths.length > 1) {
-    throw new RuntimeException(
-      'password_confirmations: multiple migration paths on the primary connection; configure with one migration directory, or install the stub manually after the Account Kit migrations'
-    )
-  }
   return {
-    directory:
-      paths.length === 1 ? fileURLToPath(new URL(paths[0], app.appRoot)) : app.migrationsPath(),
+    directories: paths.length
+      ? paths.map((path) => fileURLToPath(new URL(path, app.appRoot)))
+      : [app.migrationsPath()],
     naturalSort: connection.migrations?.naturalSort ?? false,
   }
 }
@@ -113,41 +109,60 @@ export async function configure(command: Configure) {
     )
     return
   }
-  const { directory, naturalSort } = await migrationSettings(command)
-  const { files } = (await inspect(directory, async () => {
-    const info = await stat(directory)
-    if (!info.isDirectory()) throw new RuntimeException('Expected a migration directory')
-    return sourceFiles(pathToFileURL(directory + sep), '.', naturalSort)
-  })) ?? { files: [] }
-  const migrationFileNames = files.map((file) => relative(directory, file.absPath))
+  const { directories, naturalSort } = await migrationSettings(command)
+  // Lucid runs each path in order, sorting the files within it.
+  const migrations: { directory: string; name: string }[] = []
+  for (const directory of directories) {
+    const { files } = (await inspect(directory, async () => {
+      const info = await stat(directory)
+      if (!info.isDirectory()) throw new RuntimeException('Expected a migration directory')
+      return sourceFiles(pathToFileURL(directory + sep), '.', naturalSort)
+    })) ?? { files: [] }
+    for (const file of files)
+      migrations.push({ directory, name: relative(directory, file.absPath) })
+  }
+  const pathOf = (migration: { directory: string; name: string }) =>
+    join(migration.directory, migration.name)
   const suffix = '_create_password_confirmations_table'
   const sessionsSuffix = '_account_kit_create_account_sessions'
   const hasSuffix = (file: string, name: string) => basename(file, extname(file)).endsWith(name)
-  const jsonMigration = migrationFileNames.find(
-    (file) =>
-      extname(file) === '.json' && (hasSuffix(file, suffix) || hasSuffix(file, sessionsSuffix))
+  const jsonMigration = migrations.find(
+    ({ name }) =>
+      extname(name) === '.json' && (hasSuffix(name, suffix) || hasSuffix(name, sessionsSuffix))
   )
   if (jsonMigration) {
     throw new RuntimeException(
-      `password_confirmations: ${join(directory, jsonMigration)} is JSON and cannot run as a migration; install a schema module manually and check migration history before rerunning configure`
+      `password_confirmations: ${pathOf(jsonMigration)} is JSON and cannot run as a migration; install a schema module manually and check migration history before rerunning configure`
     )
   }
-  const existingMigrations = migrationFileNames.filter((file) => hasSuffix(file, suffix))
+  const existingMigrations = migrations.filter(({ name }) => hasSuffix(name, suffix))
   if (existingMigrations.length > 1) {
     throw new RuntimeException(
-      `password_confirmations: multiple existing confirmations migrations in ${directory}`
+      `password_confirmations: multiple existing confirmations migrations in ${directories.join(', ')}`
     )
   }
   const existingConfirmationMigration = existingMigrations[0]
   // Sessions must precede confirmations. Place a fresh child after the last Lucid migration
   // in its directory so relative-path sorting cannot put the child before a nested parent.
-  const sessionsMigration = migrationFileNames.findLast((file) => hasSuffix(file, sessionsSuffix))
+  const sessionsMigration = migrations.findLast(({ name }) => hasSuffix(name, sessionsSuffix))
   let destination: string | undefined
-  if (!existingConfirmationMigration) {
-    const last = migrationFileNames.at(-1)
+  // A migration configure cannot place is skipped; the config and provider are still written.
+  const refuseMigration = (reason: string) => {
+    command.exitCode = 1
+    command.logger.logError(
+      `password_confirmations: ${reason}. The migration was not written; the stub is ${join(stubsRoot, 'migrations/create_password_confirmations_table.stub')} (see "Install the migration manually" in the README)`
+    )
+  }
+  if (!existingConfirmationMigration && directories.length > 1) {
+    refuseMigration(
+      'multiple migration paths on the primary connection and none holds a confirmations migration; configure with one migration directory, or install the stub manually after the Account Kit migrations'
+    )
+  } else if (!existingConfirmationMigration) {
+    const [directory] = directories
+    const last = migrations.at(-1)?.name
     let newest = BigInt(Date.now()) - 1n
-    for (const file of migrationFileNames) {
-      const prefix = BigInt(/^(\d+)/.exec(basename(file))?.[1] ?? '0')
+    for (const { name } of migrations) {
+      const prefix = BigInt(/^(\d+)/.exec(basename(name))?.[1] ?? '0')
       if (prefix > newest) newest = prefix
     }
     const filename = join(last ? dirname(last) : '.', `${newest + 1n}${suffix}.ts`)
@@ -158,11 +173,12 @@ export async function configure(command: Configure) {
         : last < filename)
     const path = join(directory, filename)
     if (!followsLast || (await inspect(path, () => lstat(path)))) {
-      throw new RuntimeException(
-        `password_confirmations: cannot safely place a migration at ${path}; install the stub manually after the Account Kit migrations without renaming existing migrations`
+      refuseMigration(
+        `cannot safely place a migration at ${path}; install the stub manually after the Account Kit migrations without renaming existing migrations`
       )
+    } else {
+      destination = path
     }
-    destination = path
   }
   const codemods = await command.createCodemods()
   codemods.overwriteExisting = false
@@ -180,7 +196,7 @@ export async function configure(command: Configure) {
     `usersTable: '${usersTable}'`,
   ])
   if (existingConfirmationMigration) {
-    await warnIfExistingConfigDiffers(join(directory, existingConfirmationMigration), [
+    await warnIfExistingConfigDiffers(pathOf(existingConfirmationMigration), [
       `tableName = '${tableName}'`,
       `inTable('${usersTable}')`,
       userIdColumns[userIdType],
@@ -198,14 +214,13 @@ export async function configure(command: Configure) {
   if (existingConfirmationMigration) {
     if (
       sessionsMigration &&
-      migrationFileNames.indexOf(existingConfirmationMigration) <=
-        migrationFileNames.indexOf(sessionsMigration)
+      migrations.indexOf(existingConfirmationMigration) <= migrations.indexOf(sessionsMigration)
     ) {
       command.logger.warning(
-        `password_confirmations: ${existingConfirmationMigration} must sort after ${sessionsMigration}; check migration history before making any changes`
+        `password_confirmations: ${existingConfirmationMigration.name} must sort after ${sessionsMigration.name}; check migration history before making any changes`
       )
     }
-    command.logger.info(`Skipped ${join(directory, existingConfirmationMigration)}`)
+    command.logger.info(`Skipped ${pathOf(existingConfirmationMigration)}`)
   } else if (destination) {
     await codemods.makeUsingStub(stubsRoot, 'migrations/create_password_confirmations_table.stub', {
       migration: {

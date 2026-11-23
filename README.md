@@ -38,8 +38,11 @@ confirm their password again.
 
 `configure` writes `config/password_confirmations.ts`, one migration and registers the provider. It uses
 the primary Lucid connection's single configured migration path, or AdonisJS's migration directory
-(`database/migrations` by default) if no path is set. With multiple migration paths, configure refuses
-to guess: install the stub manually after Account Kit's migrations, or configure a single path first.
+(`database/migrations` by default) if no path is set. With multiple migration paths it looks for an
+existing confirmations migration in all of them; if there is none, it refuses to guess. When it
+cannot place the migration (multiple paths, or a new file that would not sort after the last
+existing migration), it still writes the config and registers the provider, skips the migration,
+logs an error and exits with code 1: [install the migration manually](#install-the-migration-manually).
 It reports inspection failures with the affected path. It never
 overwrites existing files, so a rerun does not apply new flags; it warns when a file it kept
 disagrees with them. After an interrupted or changed setup, check three things:
@@ -55,6 +58,22 @@ disagrees with them. After an interrupted or changed setup, check three things:
 3. `adonisrc.ts` lists
    `@kevinjohn/adonisjs-confirm-action-with-password/password_confirmations_provider`. Without
    `@adonisjs/assembler`, configure warns and does not add it; add the line by hand.
+
+### Install the migration manually
+
+Copy
+`node_modules/@kevinjohn/adonisjs-confirm-action-with-password/build/stubs/migrations/create_password_confirmations_table.stub`
+to a file named `<timestamp>_create_password_confirmations_table.ts` in a migration directory where it
+sorts after `*_account_kit_create_account_sessions.ts`. Delete the leading `{{{ exports(...) }}}`
+block and replace the three values:
+
+| Placeholder                      | Value                                                                                                                |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `{{{ migration.userIdColumn }}}` | the user id column: `table.integer('user_id').unsigned()`, `table.string('user_id', 254)` or `table.uuid('user_id')` |
+| `{{{ migration.tableName }}}`    | the confirmations table, the same as `table` in the config (default `password_confirmations`)                        |
+| `{{{ migration.usersTable }}}`   | the users table, the same as `usersTable` in the config (default `users`)                                            |
+
+Then rerun configure: it finds the migration in any configured path and leaves it alone.
 
 ## User stories
 

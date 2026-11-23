@@ -19,7 +19,7 @@ As an application operator, I want to install the provider and storage so that c
 | `--user-id-type` | CLI option | Optional; `integer` (default), `string` or `uuid`; selects the generated migration's user ID column type.         |
 | `--table`        | CLI option | Optional; defaults to `password_confirmations`; must be a plain SQL identifier matching `[A-Za-z_][A-Za-z0-9_]*`. |
 
-- Configure writes config, migration and provider without overwriting files; invalid option values, ambiguous primary migration paths and non-missing inspection failures prevent those writes. It uses the primary Lucid connection's single migration path or AdonisJS's migration directory if not set. It preserves existing Lucid migration identities, including nested paths. A new migration goes next to the last Lucid-discoverable migration and must sort after it. If that is unsafe, configure stops before writing and asks the operator to install the stub manually. If Lucid has no Account Kit `account_sessions` migration, configure logs a warning and continues. Interrupted writes remain recoverable using the [setup guidance](../README.md#install).
+- Configure writes config, migration and provider without overwriting files; invalid option values and non-missing inspection failures prevent those writes. It uses the primary Lucid connection's single migration path or AdonisJS's migration directory if not set. With multiple primary migration paths it looks for an existing confirmations migration in all of them. It preserves existing Lucid migration identities, including nested paths. A new migration goes next to the last Lucid-discoverable migration and must sort after it. If the paths are ambiguous with no existing migration, or the placement is unsafe, configure still writes the config and provider, skips the migration, logs an error naming the stub and exits with code 1 so the operator installs it manually ([manual migration](../README.md#install-the-migration-manually)). If Lucid has no Account Kit `account_sessions` migration, configure logs a warning and continues. Interrupted writes remain recoverable using the [setup guidance](../README.md#install).
 - `config/password_confirmations.ts` (`defineConfig`) accepts these options:
 
 | Option             | Control                | Required/default/conditions                                                                                                                                                                                                           |
@@ -59,9 +59,12 @@ Scope: setup path; HTTP request validation, origin checks and response mapping r
 flowchart TD
     A["configure(command) reads storage flags and defaults"] --> B{"Identifiers and user ID type valid?"}
     B -->|No| C["Report invalid flags and write no files"]
-    B -->|Yes| R{"Unambiguous Lucid inventory and safe migration destination?"}
+    B -->|Yes| R{"Lucid inventory readable and at most one confirmations migration?"}
     R -->|No| R2["Report ambiguity or inspection path; no writes"]
-    R -->|Yes| W["Warn if existing config or migration differs from flags"]
+    R -->|Yes| S{"Existing migration, or one path and a safe destination?"}
+    S -->|No| S2["Log refusal naming the stub; exit code 1; skip the migration"]
+    S -->|Yes| W["Warn if existing config or migration differs from flags"]
+    S2 --> W
     W --> D["Write config only when absent"]
     D --> B2{"Account Kit sessions migration present?"}
     B2 -->|No| B3["Log warning; continue"]
