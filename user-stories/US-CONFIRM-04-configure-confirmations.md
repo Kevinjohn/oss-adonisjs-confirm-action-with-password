@@ -32,11 +32,12 @@ As an application operator, I want to install the provider and storage so that c
 | `authorize`        | Callback               | Optional; receives context and `{ action, scope, intent }` only; default allows every request; anything other than `true` refuses.                                                                                                    |
 | `throttle`         | Object or `false`      | Optional; defaults 5 `requests`, `duration` `'1 minute'`, `blockDuration` `'20 minutes'`; `requests` must be a positive safe integer and each duration must parse to a positive safe-integer number of seconds; `false` turns it off. |
 
+- `defineConfig` refuses wrong JavaScript types when the config loads, with `InvalidPasswordConfirmationsConfigException` naming the key: a config that is not an object, table names that are not strings, callbacks that are not functions and a `throttle` that is neither an object nor `false`. An absent (`undefined` or `null`) option takes its default. A duration that fails to parse keeps the parser's error as `cause`. [Config validation](../src/define_config.ts) · [Spec](../tests/define_config.spec.ts)
 - Throttling needs `@adonisjs/limiter` registered unless `throttle` is `false`; otherwise constructing the service fails with `InvalidPasswordConfirmationsConfigException`. The provider also refuses a config object without `windowMs`.
 - The provider binds the package service to Account Kit, Lucid and application hash/limiter dependencies. HTTP routes, origin checks and response mapping remain host-owned.
 - Custom `readPasswordHash` and `authorize` callbacks use only their supplied transaction and avoid side effects: Account Kit may retry them. Authorisation treats the intent as read-only.
 
-- A host using string user IDs can add its own foreign key and cascade policy for resource scope. The host compatibility fixture checks isolation across scopes and continued spending on the surviving scope. The package leaves resource ownership and authorisation to the host. [Host compatibility](../tests/host_compatibility.spec.ts)
+- A host using string user IDs can add its own foreign key and cascade rules for resource scope. The host compatibility fixture checks isolation across scopes and continued spending on the surviving scope. The package leaves resource ownership and authorisation to the host. [Host compatibility](../tests/host_compatibility.spec.ts)
 
 ## User flow
 
@@ -47,7 +48,7 @@ flowchart TD
     K -->|No| Q["Resolve flagged options, paths or existing files; retry"]
     Q --> B
     K -->|Yes| M["Run migrations"]
-    M --> C["Implement host callbacks and origin/throttle policy"]
+    M --> C["Implement host callbacks and origin and throttle rules"]
     C --> D["Feature is ready for host routes"]
 ```
 
@@ -74,7 +75,7 @@ flowchart TD
     N -->|No| M["Write migration next to, and ordered after, the last Lucid entry"]
     P --> E
     M --> E["Register provider"]
-    E --> F{"At app configuration load, defineConfig validates window, identifiers and throttle?"}
+    E --> F{"At app configuration load, defineConfig validates option types, window, identifiers and throttle?"}
     F -->|No| G2
     F -->|Yes| G{"On singleton resolution, config has windowMs, and limiter registered unless throttle is false?"}
     G -->|No| G2["InvalidPasswordConfirmationsConfigException; service not constructed"]

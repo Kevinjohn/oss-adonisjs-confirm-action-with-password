@@ -38,7 +38,7 @@ flowchart TD
     A["Account Kit lifecycle operation"] --> B["Kit invalidates session or advances credential state"]
     B --> C{"Next withConfirmation calls withCurrent; live current input accepted?"}
     C -->|No| G["Refuse invalid or revoked sign-in before consume"]
-    C -->|Yes| H["After consume guards, conditionally update eligible row using live revision and binding"]
+    C -->|Yes| H["After spend checks, conditionally update eligible row using live revision and binding"]
     H --> D{"Stored binding still matches?"}
     D -->|No| E["No matching row update; required error"]
     D -->|Yes| F["Only an eligible matching row can be consumed"]

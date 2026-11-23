@@ -4,7 +4,7 @@ Reviewed against `5bea3e4a3aaf2435bbc2ee18c8f0f8664544f01e`. The catalogue cover
 
 ## Index
 
-| Story                                                          | Action                                              | Status   |
+| Story                                                          | Operation                                           | Status   |
 | -------------------------------------------------------------- | --------------------------------------------------- | -------- |
 | [US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md)           | Issue a confirmation after re-entering the password | Current  |
 | [US-CONFIRM-02](US-CONFIRM-02-spend-confirmation.md)           | Spend a confirmation with the sensitive change      | Current  |

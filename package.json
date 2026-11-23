@@ -1,6 +1,6 @@
 {
   "name": "@kevinjohn/adonisjs-confirm-action-with-password",
-  "description": "Ask for the password again before a sensitive action, in AdonisJS apps on Account Kit",
+  "description": "Ask for the password again before a sensitive operation, in AdonisJS apps on Account Kit",
   "version": "0.3.2",
   "engines": {
     "node": ">=24.0.0"

@@ -142,11 +142,12 @@ authorize: async ({ account, trx }, { action, scope }) => {
 
 ### Browser example
 
-The [secure-note cookbook](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/blob/a8533cdd4192e98a516d60f971639ea2448d99d2/docs/cookbook/password-confirmation.md)
-shows the complete two-step journey with Account Kit 0.4.2 and Password Confirmations 0.2.2:
-[Hypermedia](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/a8533cdd4192e98a516d60f971639ea2448d99d2/apps/hypermedia),
-[Inertia React](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/a8533cdd4192e98a516d60f971639ea2448d99d2/apps/inertia-react)
-and [Inertia Vue](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/a8533cdd4192e98a516d60f971639ea2448d99d2/apps/inertia-vue).
+The [secure-note cookbook](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/blob/26c0d62053bd710a406cc362e883412c4cf13f4d/docs/cookbook/password-confirmation.md)
+shows the complete two-step journey with Account Kit 0.5.1 and Password Confirmations 0.3.1 (no
+example revision pins 0.5.2 and 0.3.2 yet):
+[Hypermedia](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/hypermedia),
+[Inertia React](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/inertia-react)
+and [Inertia Vue](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/inertia-vue).
 Each validates the request, obtains the managed guard's current account input, rejects active
 masquerade and checks its pending note before consuming the proof with the write. The host owns
 request validation, resource checks, same-origin/CSRF protection, routes and response rendering.
@@ -178,7 +179,7 @@ yourself is not checked against the sign-in or the account lock, and the guarant
   `withConfirmation`, and do not change it in `authorize` or `run`: the confirmation binds the
   value as it was when the call started.
 - Keep it small: ids and amounts, not documents. It is sorted, serialised and hashed
-  synchronously on every call, at spend inside the account lock. For a bulk action bind a digest:
+  synchronously on every call, at spend inside the account lock. For a bulk operation bind a digest:
   `{ importId, sha256, rows }`.
 
 ## Rules the host must keep
@@ -308,7 +309,7 @@ changes.
 | `E_PASSWORD_CONFIRMATION_THROTTLED`                 | 429    | Too many wrong passwords; `retryAfterSeconds` says when to retry            |
 | `E_PASSWORD_CONFIRMATION_STALE`                     | 403    | The window passed between the password check and issue                      |
 | `E_PASSWORD_CONFIRMATION_FORBIDDEN`                 | 403    | Host authorisation callback did not return literal `true`                   |
-| `E_PASSWORD_CONFIRMATION_INVALID_REQUEST`           | 400    | Malformed action, scope or intent (JSON values only)                        |
+| `E_PASSWORD_CONFIRMATION_INVALID_REQUEST`           | 400    | Malformed `action`, `scope` or `intent` (JSON values only)                  |
 | `E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED` | 500    | No Kit sign-in row: wrong strategy or `sessionManagement` off               |
 | `E_PASSWORD_CONFIRMATION_INVALID_CONFIG`            | 500    | `config/password_confirmations.ts` missing or invalid                       |
 
@@ -335,7 +336,7 @@ export default class HttpExceptionHandler extends ExceptionHandler {
 
 `E_ACCOUNT_KIT_POST_COMMIT` (`error.committed === true`) also passes through. The transaction
 committed before it was thrown: from `withConfirmation` the confirmation is spent and your `run`
-writes are stored, so do not ask for a new confirmation and repeat the action; check what was
+writes are stored, so do not ask for a new confirmation and repeat the operation; check what was
 stored. From `confirmPassword` a confirmation was issued but its id was lost: ask the user to
 confirm again, and the orphan expires on its own. Every other error rolled back.
 
