@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.4.0 - 2026-11-23
+
+- Require Account Kit 0.6.0.
 - `authorize` can be registered from an application provider through the
   `password_confirmations.callbacks` container binding (`PasswordConfirmationCallbackRegistry`,
   `register(factory)`), so the config file need not import application code. Setting it in both the
