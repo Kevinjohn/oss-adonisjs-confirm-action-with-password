@@ -26,7 +26,7 @@ protected change. It proves recent password confirmation, not permission to acce
 ## Install
 
 ```sh
-pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.3.2/kevinjohn-adonisjs-confirm-action-with-password-0.3.2.tgz
+pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.3.3/kevinjohn-adonisjs-confirm-action-with-password-0.3.3.tgz
 node ace configure @kevinjohn/adonisjs-confirm-action-with-password   # --users-table, --user-id-type as for Account Kit
 node ace migration:run
 ```
@@ -82,7 +82,7 @@ write a second migration creating the same table, which then fails when it runs.
 
 ## User stories
 
-See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.3.2/user-stories/README.md) for the source-reviewed capabilities and boundaries.
+See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.3.3/user-stories/README.md) for the source-reviewed capabilities and boundaries.
 
 ## Use
 
@@ -144,7 +144,7 @@ authorize: async ({ account, trx }, { action, scope }) => {
 
 The [secure-note cookbook](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/blob/26c0d62053bd710a406cc362e883412c4cf13f4d/docs/cookbook/password-confirmation.md)
 shows the complete two-step journey with Account Kit 0.5.1 and Password Confirmations 0.3.1 (no
-example revision pins 0.5.2 and 0.3.2 yet):
+example revision pins a later pair yet):
 [Hypermedia](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/hypermedia),
 [Inertia React](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/inertia-react)
 and [Inertia Vue](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/inertia-vue).
