@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.3 - 2026-11-23
+
 - Correction to 0.2.2: that release also changed the public `KitContext` type to Account Kit's
   `CurrentAccountContext`, and the service calls `readCredentialRevision()` on it. A host that
   builds the context itself instead of passing the one `withCurrent` gives gets a compile error, or
