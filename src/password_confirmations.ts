@@ -189,7 +189,7 @@ export class PasswordConfirmations {
    *   password,
    * })
    * ```
-   * @throws {AggregateError} Password verification and refund both fail; `errors[0]` is the verification fault.
+   * @throws {AggregateError} Work and cleanup both fail during verification/refund or the Account Kit transaction; `errors[0]` is the work failure.
    */
   async confirmPassword(
     input: CurrentAccountInput,
@@ -358,6 +358,7 @@ export class PasswordConfirmations {
    *   async (context) => transferOwnership(context, companyId, toUserId)
    * )
    * ```
+   * @throws {AggregateError} The Account Kit operation and its cleanup both fail; `errors[0]` is the work failure.
    */
   withConfirmation<T>(
     input: CurrentAccountInput,
