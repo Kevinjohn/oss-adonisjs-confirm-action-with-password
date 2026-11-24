@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.4.1 - 2026-11-24
+
+- Clarify setup helper names, duration conversion and the authorization callback loader.
+- Document how callback registration handles an omitted value and an untyped null value.
+- Require Account Kit `0.6.1` exactly.
+
 ## 0.4.0 - 2026-11-23
 
 - Require Account Kit 0.6.0.
