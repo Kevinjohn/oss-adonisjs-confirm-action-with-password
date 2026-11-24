@@ -3,7 +3,7 @@
 As a signed-in account holder, I want to confirm my password for a named sensitive operation so that the application can require recent proof before it changes important data.
 
 **Status:** Current, for a current Account Kit session with session management enabled.
-**Access:** Account Kit session sign-in with a server-side session store (the cookie store keeps a copied session alive after sign-out, so the sign-out guarantee in [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md) needs a server-side store; [README requirements](../README.md#requirements)); access tokens are refused because they have no sign-in row. Host must reject foreign-origin issuance requests before invoking the service.
+**Access:** Account Kit session sign-in with a server-side session store (the cookie store keeps a copied session alive after sign-out, so the sign-out guarantee in [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md) needs a server-side store; [README requirements](../README.md#requirements)); access tokens are refused because they have no sign-in row. Kit also applies its configured `canAccess` policy; this path does not independently require verified email. The host must reject foreign-origin issuance requests before invoking the service.
 **Entry:** Host-owned issuance endpoint calls `passwordConfirmations.confirmPassword(input, request)`; the package has no HTTP control.
 **Documentation:** [README usage and host requirements](../README.md#use)
 **Source:** [`PasswordConfirmations.confirmPassword`](../src/password_confirmations.ts)
@@ -48,7 +48,7 @@ flowchart TD
     S1 -->|Pre-commit failure| X
     S1 -->|Committed with follow-up error| X1["Propagate Kit error before verification"]
     S1 -->|Success| T{"Package throttle on?"}
-    T -->|"No (throttle: false; host throttles in its own route)"| E["verify hash outside Kit transaction"]
+    T -->|"No (throttle: false; host throttles in its own route)"| E["Check password outside Kit transaction when string and hash are present"]
     T -->|Yes| D{"reserveAttempt: block and budget allow?"}
     D -->|No| D2["Throttle refusal (429) or limiter fault; no hash run, no row issued"]
     D -->|Yes| E

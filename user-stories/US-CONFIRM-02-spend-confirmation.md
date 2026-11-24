@@ -12,7 +12,7 @@ As a signed-in account holder, I want the application to spend my confirmation w
 ## Acceptance criteria
 
 - The host sends a non-empty confirmation ID and the same 1–255 character `action`/`scope` strings plus the required canonicalisable JSON intent. There is no package form or route.
-- A matching live confirmation is marked consumed before `run`; the mark and host change share the Kit transaction.
+- A matching live confirmation is marked consumed before `run`; the mark and host change share the Kit transaction. A `run` that returns normally commits the spend even if its own update affects no rows.
 - A missing, expired, consumed, mismatched or revoked confirmation is rejected; rollback of `run` also rolls back the spend. A request that fails binding (invalid `action`, `scope` or `intent`, 400), has no registered sign-in, or fails host authorisation is refused before any row is updated.
 
 - If Kit reports `E_ACCOUNT_KIT_POST_COMMIT` with `committed === true`, the spend and transaction writes are already stored. The host checks the stored outcome before deciding how to respond. [README errors](../README.md#errors)
@@ -30,7 +30,7 @@ flowchart TD
     C -->|Yes| E["Sensitive change runs"]
     E --> F{"Transaction commits?"}
     F -->|No| G["Change and spend roll back"]
-    F -->|Yes| H["Change commits; confirmation cannot be reused"]
+    F -->|Yes| H["Transaction commits; confirmation cannot be reused, even if host write was a no-op"]
     H -->|Follow-up fails| I["Host checks stored outcome before responding"]
 ```
 
@@ -54,7 +54,7 @@ flowchart TD
     R -->|withConfirmation| F["run(context) in same trx"]
     R -->|consume| Y["Return to caller's callback; caller owns remaining writes"]
     Y --> G
-    F --> G{"Kit transaction outcome?"}
+    F --> G{"Kit transaction outcome, including a normally returned no-op?"}
     G -->|Pre-commit failure| I["Roll back spend and protected writes"]
     G -->|Commit and follow-up succeed| J["Return host result"]
     G -->|Committed with follow-up error| K["Propagate Kit error; spend and protected writes remain stored"]

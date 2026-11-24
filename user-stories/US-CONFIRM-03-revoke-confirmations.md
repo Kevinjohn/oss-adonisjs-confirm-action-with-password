@@ -21,7 +21,7 @@ As an account holder, I want confirmations tied to my current sign-in and creden
 
 ```mermaid
 flowchart TD
-    A["Account holder changes password or sign-in state"] --> B["Account Kit applies lifecycle change"]
+    A["Account holder or host performs a security operation"] --> B["Account Kit invalidates this sign-in or changes its credential revision"]
     B --> C["Previously issued confirmation is no longer usable"]
     C --> D["Next sensitive request is refused"]
     D --> E{"Account can establish an eligible sign-in?"}
@@ -31,7 +31,7 @@ flowchart TD
 
 ## Code flow
 
-Scope: confirm refusal through the [Account Kit current-sign-in check](https://github.com/Kevinjohn/oss-adonisjs-account-kit/blob/becffc90271b79c3ce6d2c1dfe0e0b3e871a9fc8/src/authentication.ts#L269-L283) or the package spend condition. The [Account Kit lifecycle contract](../README.md#what-ends-a-confirmation) and linked tests identify the invalidation triggers.
+Scope: confirm refusal through the [Account Kit current-sign-in check](https://github.com/Kevinjohn/oss-adonisjs-account-kit/blob/d01b742c5416b747b300402c1669f5aaf6bba290/src/authentication.ts#L269-L283) or the package spend condition. The [Account Kit lifecycle contract](../README.md#what-ends-a-confirmation) and linked tests identify the invalidation triggers.
 
 ```mermaid
 flowchart TD

@@ -34,7 +34,7 @@ As an application operator, I want to install the provider and storage so that c
 
 - `defineConfig` refuses wrong JavaScript types when the config loads, with `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` naming the key: a config that is not an object, table names that are not strings, callbacks that are not functions and a `throttle` that is neither an object nor `false`. An absent (`undefined` or `null`) option takes its default when the config sets one. A missing `authorize` stays unset during config validation. A duration that fails to parse keeps the parser's error as `cause`. [Config validation](../src/define_config.ts) · [Spec](../tests/define_config.spec.ts)
 - Throttling needs `@adonisjs/limiter` registered unless `throttle` is `false`; otherwise constructing the service fails with `E_PASSWORD_CONFIRMATION_INVALID_CONFIG`. The provider refuses a config object without `windowMs` before resolving the callback registry.
-- The provider binds the package service to Account Kit, Lucid and application hash/limiter dependencies. HTTP routes, origin checks and response mapping remain host-owned.
+- The provider binds the package service to Account Kit, Lucid and application hash/limiter dependencies. `windowMs` exposes the resolved window in milliseconds. Direct construction takes the dependencies in the public type, including a fallback verifier and optional clock. HTTP routes, origin checks and response mapping remain host-owned.
 - Custom `readPasswordHash` and `authorize` callbacks use only their supplied transaction and avoid side effects: Account Kit may retry them. Authorisation treats the intent as read-only.
 
 - A host using string user IDs can add its own foreign key and cascade rules for resource scope. The host compatibility fixture checks isolation across scopes and continued spending on the surviving scope. The package leaves resource ownership and authorisation to the host. [Host compatibility](../tests/host_compatibility.spec.ts)
@@ -60,7 +60,7 @@ Scope: setup path; HTTP request validation, origin checks and response mapping r
 flowchart TD
     A["configure(command) reads storage flags and defaults"] --> B{"Identifiers and user ID type valid?"}
     B -->|No| C["Report invalid flags and write no files"]
-    B -->|Yes| R{"Lucid inventory readable and at most one confirmations migration?"}
+    B -->|Yes| R{"Lucid inventory readable, no matching JSON migration and at most one confirmations migration?"}
     R -->|No| R2["Report ambiguity or inspection path; no writes"]
     R -->|Yes| S{"Existing migration, or one path and a safe destination?"}
     S -->|No| S2["Log refusal naming the stub; exit code 1; skip the migration"]
