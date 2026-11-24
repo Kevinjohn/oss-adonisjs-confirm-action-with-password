@@ -247,7 +247,7 @@ try {
       publicService.withConfirmation(input, consumeRequest, async () => {
         throw new Error('replayed callback must never run')
       }),
-    PasswordConfirmationRequiredException
+    errors.E_PASSWORD_CONFIRMATION_REQUIRED
   )
   assert.equal((await db.from('effects')).length, 1)
   console.log('packed layout, configure, migrations, service identity, issue and single spend ok')

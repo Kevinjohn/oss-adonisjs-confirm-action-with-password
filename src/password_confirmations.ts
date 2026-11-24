@@ -14,13 +14,13 @@ import type { Limiter } from '@adonisjs/limiter'
 import type { CurrentAccountInput, Trx, UserId } from '@kevinjohn/adonisjs-account-kit/types'
 import { buildConfirmationBinding } from './intent_hash.js'
 import {
-  PasswordConfirmationDeniedException,
-  PasswordConfirmationForbiddenException,
-  PasswordConfirmationRequiredException,
-  PasswordConfirmationStaleException,
-  PasswordConfirmationThrottledException,
-  InvalidPasswordConfirmationsConfigException,
-  SessionRegistryRequiredException,
+  E_PASSWORD_CONFIRMATION_DENIED,
+  E_PASSWORD_CONFIRMATION_FORBIDDEN,
+  E_PASSWORD_CONFIRMATION_REQUIRED,
+  E_PASSWORD_CONFIRMATION_STALE,
+  E_PASSWORD_CONFIRMATION_THROTTLED,
+  E_PASSWORD_CONFIRMATION_INVALID_CONFIG,
+  E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED,
 } from './errors.js'
 import type {
   IssuedConfirmation,
@@ -53,6 +53,13 @@ function extractAffectedRowCount(result: unknown) {
  * transactions; password verification and limiter storage occur outside them. Spending requires
  * the active Kit transaction and rolls back with the protected write. Pruning uses the database
  * directly, independently of the account lock.
+ *
+ * @example
+ * ```ts
+ * import passwordConfirmations from '@kevinjohn/adonisjs-confirm-action-with-password/services/main'
+ *
+ * const confirmationWindowMs = passwordConfirmations.windowMs
+ * ```
  */
 export class PasswordConfirmations {
   readonly #accountKit: PasswordConfirmationsDependencies['kit']
@@ -71,7 +78,7 @@ export class PasswordConfirmations {
     const throttle = dependencies.config.throttle
     if (throttle) {
       if (!dependencies.limiter) {
-        throw new InvalidPasswordConfirmationsConfigException(
+        throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG(
           'throttle needs @adonisjs/limiter; register its provider or set throttle: false'
         )
       }
@@ -95,7 +102,7 @@ export class PasswordConfirmations {
     const { action, scope, intent } = request
     const authorize = this.#config.authorize ?? (async () => true)
     if ((await authorize(context, { action, scope, intent })) !== true) {
-      throw new PasswordConfirmationForbiddenException()
+      throw new E_PASSWORD_CONFIRMATION_FORBIDDEN()
     }
   }
 
@@ -115,7 +122,7 @@ export class PasswordConfirmations {
   async #reserveAttempt(keys: { attemptKey: string; blockKey: string }) {
     const block = await this.#throttle!.get(keys.blockKey)
     if (block && block.consumed > 0) {
-      throw new PasswordConfirmationThrottledException(block.availableIn)
+      throw new E_PASSWORD_CONFIRMATION_THROTTLED(block.availableIn)
     }
     const key = keys.attemptKey
     try {
@@ -123,7 +130,7 @@ export class PasswordConfirmations {
     } catch (error) {
       if (error instanceof limiterErrors.E_TOO_MANY_REQUESTS) {
         if (error.response.consumed > error.response.limit) await this.#throttle!.decrement(key)
-        throw new PasswordConfirmationThrottledException(error.response.availableIn)
+        throw new E_PASSWORD_CONFIRMATION_THROTTLED(error.response.availableIn)
       }
       throw error
     }
@@ -149,7 +156,8 @@ export class PasswordConfirmations {
   }
 
   #requireSignInId(context: KitContext) {
-    if (context.signInId === undefined) throw new SessionRegistryRequiredException()
+    if (context.signInId === undefined)
+      throw new E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED()
     return context.signInId
   }
 
@@ -168,6 +176,16 @@ export class PasswordConfirmations {
    * revision, and the exact request. Stage 1 snapshots the hash under the Kit lock; the slow hash
    * runs outside any transaction; stage 2 re-runs `withCurrent` with the same `input`, so the Kit
    * re-checks the sign-in and credential revision, and issues only while the window holds.
+   *
+   * @example
+   * ```ts
+   * const { confirmationId, expiresAt } = await passwordConfirmations.confirmPassword(input, {
+   *   action: 'transfer-ownership',
+   *   scope: companyId,
+   *   intent: { toUserId },
+   *   password,
+   * })
+   * ```
    */
   async confirmPassword(
     input: CurrentAccountInput,
@@ -218,7 +236,7 @@ export class PasswordConfirmations {
     }
     if (!isPasswordCorrect) {
       if (this.#throttle) await this.#recordPasswordFailure(throttleKeys)
-      throw new PasswordConfirmationDeniedException()
+      throw new E_PASSWORD_CONFIRMATION_DENIED()
     }
     // The window runs from the check itself, not from the limiter reset that follows it.
     const verifiedAt = this.#readNow()
@@ -233,14 +251,14 @@ export class PasswordConfirmations {
 
     return this.#accountKit.authentication.withCurrent(current, async (context) => {
       if (context.account.id !== issuanceSnapshot.userId)
-        throw new PasswordConfirmationRequiredException()
+        throw new E_PASSWORD_CONFIRMATION_REQUIRED()
       const signInId = this.#requireSignInId(context)
       await this.#assertConfirmationAllowed(context, request)
       const issuedAt = this.#readNow()
       // The deadline is stored, so a later change to `window` cannot move it for this confirmation.
       const expiresAt = verifiedAt + this.#config.windowMs
       // Same input, so withCurrent has re-checked this sign-in and its credential revision.
-      if (issuedAt >= expiresAt) throw new PasswordConfirmationStaleException()
+      if (issuedAt >= expiresAt) throw new E_PASSWORD_CONFIRMATION_STALE()
       const revision = await context.readCredentialRevision()
       await context.trx
         .from(this.#config.table)
@@ -272,13 +290,26 @@ export class PasswordConfirmations {
    * Kit's context, the credential revision is read live in the same transaction, so nothing the
    * caller passes besides the confirmation and request can widen its binding. The host remains
    * responsible for resource permission. The spend rolls back with the caller's transaction.
+   *
+   * @example
+   * ```ts
+   * await kit.authentication.withCurrent(input, async (context) => {
+   *   await passwordConfirmations.consume(context, {
+   *     confirmationId,
+   *     action: 'transfer-ownership',
+   *     scope: companyId,
+   *     intent: { toUserId },
+   *   })
+   *   await transferOwnership(context, companyId, toUserId)
+   * })
+   * ```
    */
   async consume(context: KitContext, request: ConsumeRequest) {
     const signInId = this.#requireSignInId(context)
     const binding = buildConfirmationBinding(request)
     await this.#assertConfirmationAllowed(context, request)
     if (typeof request.confirmationId !== 'string' || request.confirmationId === '') {
-      throw new PasswordConfirmationRequiredException()
+      throw new E_PASSWORD_CONFIRMATION_REQUIRED()
     }
     const now = this.#readNow()
     const revision = await context.readCredentialRevision()
@@ -302,11 +333,23 @@ export class PasswordConfirmations {
     if (revision === null) query.whereNull('credential_revision')
     else query.where('credential_revision', revision)
     if (extractAffectedRowCount(await query.update({ consumed_at: now })) !== 1) {
-      throw new PasswordConfirmationRequiredException()
+      throw new E_PASSWORD_CONFIRMATION_REQUIRED()
     }
   }
 
-  /** `withCurrent` + `consume` + `run` in one Kit transaction. Prefer this over `consume`. */
+  /**
+   * Spends the confirmation and runs the protected operation in one account transaction.
+   * Prefer this over calling `consume` directly.
+   *
+   * @example
+   * ```ts
+   * await passwordConfirmations.withConfirmation(
+   *   input,
+   *   { confirmationId, action: 'transfer-ownership', scope: companyId, intent: { toUserId } },
+   *   async (context) => transferOwnership(context, companyId, toUserId)
+   * )
+   * ```
+   */
   withConfirmation<T>(
     input: CurrentAccountInput,
     request: ConsumeRequest,
@@ -321,7 +364,14 @@ export class PasswordConfirmations {
     )
   }
 
-  /** Deletes spent and expired confirmations. Schedule it; returns the number of rows removed. */
+  /**
+   * Deletes spent and expired confirmations. Schedule it; returns the number of rows removed.
+   *
+   * @example
+   * ```ts
+   * const removed = await passwordConfirmations.prune()
+   * ```
+   */
   async prune() {
     return extractAffectedRowCount(
       await this.#db
