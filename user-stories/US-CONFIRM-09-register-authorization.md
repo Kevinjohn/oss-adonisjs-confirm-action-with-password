@@ -13,7 +13,7 @@ As a host application developer, I want to provide the service with an authoriza
 
 - The generated config includes `authorize: async () => true`. Remove that setting to supply the authorization callback via the registry. Configure preserves an existing config on reruns.
 - `register(factory)` takes one zero-argument factory that returns `{ authorize? }` synchronously or through a promise. List the host provider before any provider whose `boot()` resolves `PasswordConfirmations`. The registry rejects a second registration and rejects registration after resolution begins. The provider calls the factory at first service resolution and the registry caches that promise, including any rejection.
-- Service resolution rejects a callback supplied in both places or a non-function registry `authorize`, with `E_PASSWORD_CONFIRMATION_INVALID_CONFIG`. An absent callback is allowed. The service defaults to allowing the permission check when both sources omit it.
+- The provider treats an omitted registry `authorize` or a `null` value from untyped code as absent. Service resolution fails with `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` if the registry supplies a non-null, non-undefined value that is not a function or if both sources supply a callback. The service allows the permission check by default when neither source provides a callback.
 - The authorization callback receives `KitContext` and `{ action, scope, intent }`. It runs in the Kit transaction at both issuance stages and during spend. Only literal `true` permits the operation. Use the supplied transaction for reads, leave the intent unchanged and keep the callback safe to rerun.
 
 ## User flow
@@ -27,7 +27,7 @@ flowchart TD
     D --> E
     E -->|Configuration or factory error| F["Correct registration, provider order or callback and restart"]
     F --> A
-    E -->|Yes| G["Service checks the configured policy when issuing or spending"]
+    E -->|Yes| G["Service uses the callback when issuing or spending, or allows by default if absent"]
 ```
 
 ## Code flow
@@ -45,8 +45,8 @@ flowchart TD
     E -->|Missing| X
     E -->|Present| F["Registry.resolve runs and caches optional factory"]
     F -->|Factory rejects| Y["Propagate factory error"]
-    F -->|Resolves| G{"Registry supplies authorize?"}
-    G -->|Config also supplied it or registry value is not a function| X
+    F -->|Resolves| G{"Check registry authorize, treating null and undefined as absent"}
+    G -->|Non-function value other than null or undefined, or callbacks in both sources| X
     G -->|Valid registry callback or absent| H["Resolve dependencies; construct service with config.authorize or registry callback"]
     H -->|Dependency or construction error| Z["Service resolution rejects"]
     H -->|Success| I["Return PasswordConfirmations for issuance and spending"]
