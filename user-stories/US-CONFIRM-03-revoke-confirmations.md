@@ -31,7 +31,7 @@ flowchart TD
 
 ## Code flow
 
-Scope: confirm refusal through the [Account Kit current-sign-in check](https://github.com/Kevinjohn/oss-adonisjs-account-kit/blob/d01b742c5416b747b300402c1669f5aaf6bba290/src/authentication.ts#L269-L283) or the package spend condition. The [Account Kit lifecycle contract](../README.md#what-ends-a-confirmation) and linked tests identify the invalidation triggers.
+Scope: confirm refusal through the [Account Kit current-sign-in check](https://github.com/Kevinjohn/oss-adonisjs-account-kit/blob/7674d4c589f2d4d33c67d1ec6a2d3afe5f92140b/src/authentication.ts#L303-L317) or the package spend condition. The [Account Kit lifecycle contract](../README.md#what-ends-a-confirmation) and linked tests identify the invalidation triggers.
 
 ```mermaid
 flowchart TD
