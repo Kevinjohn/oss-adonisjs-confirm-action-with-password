@@ -1,5 +1,7 @@
 # @kevinjohn/adonisjs-confirm-action-with-password
 
+This README describes the unreleased API. The installation command below selects the latest published archive, which does not yet include these changes. For the installed v0.4.1 archive, use the [v0.4.1 error reference](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.4.1/README.md#errors).
+
 Ask for the password again before a sensitive operation (ownership transfer, import, bulk
 anonymisation) in AdonisJS 7 apps that sign in through
 [Account Kit](https://github.com/Kevinjohn/oss-adonisjs-account-kit).
@@ -331,8 +333,6 @@ changes.
 | `account_sessions.id` | foreign key with `ON DELETE CASCADE`                                                                | the migration fails: confirmations cannot be stored                            |
 
 ## Errors
-
-This section describes the unreleased exception API. For the installed v0.4.1 archive, use the [v0.4.1 error reference](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.4.1/README.md#errors).
 
 Match a specific exception with `instanceof errors.E_PASSWORD_CONFIRMATION_REQUIRED`, for example,
 or check its `code` against the corresponding value below.
