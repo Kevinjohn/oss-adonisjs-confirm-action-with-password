@@ -171,7 +171,7 @@ export interface Fixture {
   close(): Promise<void>
 }
 
-/** Boots a real AdonisJS app with Lucid, the limiter, Account Kit 0.6.1 and this package. */
+/** Boots a real AdonisJS app with Lucid, the limiter, Account Kit 0.7.0 and this package. */
 export async function bootFixture(
   options: {
     strategy?: 'session' | 'access_tokens'
