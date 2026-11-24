@@ -17,9 +17,11 @@ import {
   E_PASSWORD_CONFIRMATION_DENIED,
   E_PASSWORD_CONFIRMATION_FORBIDDEN,
   E_PASSWORD_CONFIRMATION_REQUIRED,
+  E_PASSWORD_CONFIRMATION_ACCOUNT_CHANGED,
+  E_PASSWORD_CONFIRMATION_BINDING_REJECTED,
   E_PASSWORD_CONFIRMATION_STALE,
   E_PASSWORD_CONFIRMATION_THROTTLED,
-  E_PASSWORD_CONFIRMATION_INVALID_CONFIG,
+  E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED,
   E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED,
 } from './errors.js'
 import type {
@@ -78,7 +80,7 @@ export class PasswordConfirmations {
     const throttle = dependencies.config.throttle
     if (throttle) {
       if (!dependencies.limiter) {
-        throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG(
+        throw new E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED(
           'throttle needs @adonisjs/limiter; register its provider or set throttle: false'
         )
       }
@@ -186,6 +188,7 @@ export class PasswordConfirmations {
    *   password,
    * })
    * ```
+   * @throws {AggregateError} Password verification and refund both fail; `errors[0]` is the verification fault.
    */
   async confirmPassword(
     input: CurrentAccountInput,
@@ -251,7 +254,7 @@ export class PasswordConfirmations {
 
     return this.#accountKit.authentication.withCurrent(current, async (context) => {
       if (context.account.id !== issuanceSnapshot.userId)
-        throw new E_PASSWORD_CONFIRMATION_REQUIRED()
+        throw new E_PASSWORD_CONFIRMATION_ACCOUNT_CHANGED()
       const signInId = this.#requireSignInId(context)
       await this.#assertConfirmationAllowed(context, request)
       const issuedAt = this.#readNow()
@@ -333,7 +336,7 @@ export class PasswordConfirmations {
     if (revision === null) query.whereNull('credential_revision')
     else query.where('credential_revision', revision)
     if (extractAffectedRowCount(await query.update({ consumed_at: now })) !== 1) {
-      throw new E_PASSWORD_CONFIRMATION_REQUIRED()
+      throw new E_PASSWORD_CONFIRMATION_BINDING_REJECTED()
     }
   }
 

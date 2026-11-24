@@ -15,7 +15,7 @@ import { bootFixture, readCallResult, makeSessionGuard } from './helpers.js'
 const PW = 'pw-one-Original-7'
 const PW2 = 'Correct-Horse-9-battery'
 const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
-const DEAD = ['E_PASSWORD_CONFIRMATION_REQUIRED', 'E_ACCOUNT_KIT_INVALID_SESSION']
+const DEAD = ['E_PASSWORD_CONFIRMATION_BINDING_REJECTED', 'E_ACCOUNT_KIT_INVALID_SESSION']
 
 let fixture: Fixture
 let users = 0

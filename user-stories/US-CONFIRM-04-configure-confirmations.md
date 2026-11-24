@@ -32,8 +32,8 @@ As an application operator, I want to install the provider and storage so that c
 | `authorize`        | Callback               | Optional; receives context and `{ action, scope, intent }` only; optional here when registered from a host provider. The service allows by default when both sources omit it. See [US-CONFIRM-09](US-CONFIRM-09-register-authorization.md). |
 | `throttle`         | Object or `false`      | Optional; defaults 5 `requests`, `duration` `'1 minute'`, `blockDuration` `'20 minutes'`; `requests` must be a positive safe integer and each duration must parse to a positive safe-integer number of seconds; `false` turns it off.       |
 
-- `defineConfig` refuses wrong JavaScript types when the config loads, with `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` naming the key: a config that is not an object, table names that are not strings, callbacks that are not functions and a `throttle` that is neither an object nor `false`. An absent (`undefined` or `null`) option takes its default when the config sets one. A missing `authorize` stays unset during config validation. A duration that fails to parse keeps the parser's error as `cause`. [Config validation](../src/define_config.ts) · [Spec](../tests/define_config.spec.ts)
-- Throttling needs `@adonisjs/limiter` registered unless `throttle` is `false`; otherwise constructing the service fails with `E_PASSWORD_CONFIRMATION_INVALID_CONFIG`. The provider refuses a config object without `windowMs` before resolving the callback registry.
+- `defineConfig` refuses wrong JavaScript types when the config loads, with a cause-specific code naming the key: `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` for a non-object config, `E_PASSWORD_CONFIRMATION_INVALID_TABLE` for table names, `E_PASSWORD_CONFIRMATION_INVALID_CALLBACK` for callbacks, `E_PASSWORD_CONFIRMATION_INVALID_THROTTLE` for throttle shape, `E_PASSWORD_CONFIRMATION_INVALID_BUDGET` for its request count, and `E_PASSWORD_CONFIRMATION_INVALID_DURATION` for duration syntax or range. An absent (`undefined` or `null`) option takes its default when the config sets one. A missing `authorize` stays unset during config validation. A duration that fails to parse keeps the parser's error as `cause`. [Config validation](../src/define_config.ts) · [Spec](../tests/define_config.spec.ts)
+- Throttling needs `@adonisjs/limiter` registered unless `throttle` is `false`; otherwise constructing the service fails with `E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED`. The provider refuses a config object without `windowMs` with `E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED` before resolving the callback registry.
 - The provider binds the package service to Account Kit, Lucid and application hash/limiter dependencies. HTTP routes, origin checks and response mapping remain host-owned.
 - Custom `readPasswordHash` and `authorize` callbacks use only their supplied transaction and avoid side effects: Account Kit may retry them. Authorisation treats the intent as read-only.
 
@@ -77,9 +77,9 @@ flowchart TD
     P --> E
     M --> E["Register provider"]
     E --> F{"At app configuration load, defineConfig validates option types, window, identifiers and throttle?"}
-    F -->|No| G2
+    F -->|No| V["Throw cause-specific configuration error"]
     F -->|Yes| G{"Config has windowMs on singleton resolution?"}
-    G -->|No| G2["E_PASSWORD_CONFIRMATION_INVALID_CONFIG; service not constructed"]
+    G -->|No| G2["E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED; service not constructed"]
     G -->|Yes| R3["Resolve authorisation configuration as in US-CONFIRM-09"]
     R3 -->|Error| X1["Service resolution rejects"]
     R3 -->|Success| G4{"Resolve dependencies and construct service; limiter required when throttling?"}

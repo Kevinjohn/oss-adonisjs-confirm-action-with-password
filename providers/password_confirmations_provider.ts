@@ -11,7 +11,11 @@ import type { ApplicationService } from '@adonisjs/core/types'
 import { AccountKit } from '@kevinjohn/adonisjs-account-kit'
 import { PasswordConfirmations } from '../src/password_confirmations.js'
 import { PasswordConfirmationCallbackRegistry } from '../src/callback_registry.js'
-import { E_PASSWORD_CONFIRMATION_INVALID_CONFIG } from '../src/errors.js'
+import {
+  E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED,
+  E_PASSWORD_CONFIRMATION_CALLBACK_CONFLICT,
+  E_PASSWORD_CONFIRMATION_INVALID_CALLBACK,
+} from '../src/errors.js'
 import type { ResolvedPasswordConfirmationsConfig } from '../src/types.js'
 
 declare module '@adonisjs/core/types' {
@@ -41,18 +45,18 @@ export default class PasswordConfirmationsProvider {
         'password_confirmations'
       )
       if (!config?.windowMs) {
-        throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG('export default defineConfig({...})')
+        throw new E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED('export default defineConfig({...})')
       }
       const callbacks = await callbackRegistry.resolve()
       const authorize = callbacks?.authorize ?? undefined
       if (authorize !== undefined) {
         if (config.authorize) {
-          throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG(
+          throw new E_PASSWORD_CONFIRMATION_CALLBACK_CONFLICT(
             'authorize is set in both the config and password_confirmations.callbacks'
           )
         }
         if (typeof authorize !== 'function') {
-          throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG('authorize must be a function')
+          throw new E_PASSWORD_CONFIRMATION_INVALID_CALLBACK('authorize must be a function')
         }
       }
       const hash = await resolver.make('hash')

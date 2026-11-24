@@ -141,7 +141,7 @@ authorize: async ({ account, trx }, { action, scope }) => {
 ```
 
 `authorize` may come from the callback registry instead of the config file; set it in one place
-only, or resolving the service throws `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` naming `authorize`.
+only, or resolving the service throws `E_PASSWORD_CONFIRMATION_CALLBACK_CONFLICT` naming `authorize`.
 
 ### Registering callbacks from a provider
 
@@ -335,16 +335,34 @@ changes.
 Match a specific exception with `instanceof errors.E_PASSWORD_CONFIRMATION_REQUIRED`, for example,
 or check its `code` against the corresponding value below.
 
-| Code                                                | Status | Meaning                                                                     |
-| --------------------------------------------------- | ------ | --------------------------------------------------------------------------- |
-| `E_PASSWORD_CONFIRMATION_REQUIRED`                  | 403    | Missing, spent, expired, or bound to another sign-in, credential or request |
-| `E_PASSWORD_CONFIRMATION_DENIED`                    | 403    | Wrong password                                                              |
-| `E_PASSWORD_CONFIRMATION_THROTTLED`                 | 429    | Too many wrong passwords; `retryAfterSeconds` says when to retry            |
-| `E_PASSWORD_CONFIRMATION_STALE`                     | 403    | The window passed between the password check and issue                      |
-| `E_PASSWORD_CONFIRMATION_FORBIDDEN`                 | 403    | Host authorisation callback did not return literal `true`                   |
-| `E_PASSWORD_CONFIRMATION_INVALID_REQUEST`           | 400    | Malformed `action`, `scope` or `intent` (JSON values only)                  |
-| `E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED` | 500    | No Kit sign-in row: wrong strategy or `sessionManagement` off               |
-| `E_PASSWORD_CONFIRMATION_INVALID_CONFIG`            | 500    | `config/password_confirmations.ts` missing or invalid                       |
+| Code                                                | Status | Meaning                                                          |
+| --------------------------------------------------- | ------ | ---------------------------------------------------------------- |
+| `E_PASSWORD_CONFIRMATION_REQUIRED`                  | 403    | No confirmation identifier supplied                              |
+| `E_PASSWORD_CONFIRMATION_DENIED`                    | 403    | Wrong password                                                   |
+| `E_PASSWORD_CONFIRMATION_THROTTLED`                 | 429    | Too many wrong passwords; `retryAfterSeconds` says when to retry |
+| `E_PASSWORD_CONFIRMATION_STALE`                     | 403    | The window passed between the password check and issue           |
+| `E_PASSWORD_CONFIRMATION_FORBIDDEN`                 | 403    | Host authorisation callback did not return literal `true`        |
+| `E_PASSWORD_CONFIRMATION_INVALID_REQUEST`           | 400    | Malformed `action` or `scope` name                               |
+| `E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED` | 500    | No Kit sign-in row: wrong strategy or `sessionManagement` off    |
+| `E_PASSWORD_CONFIRMATION_INVALID_CONFIG`            | 500    | Configuration is not an object                                   |
+
+| `E_PASSWORD_CONFIRMATION_ACCOUNT_CHANGED` | 403 | Account changed between password verification and issuance |
+| `E_PASSWORD_CONFIRMATION_BINDING_REJECTED` | 403 | No spendable proof matches this account, sign-in, credential and request |
+| `E_PASSWORD_CONFIRMATION_INTENT_DEPTH` | 400 | Intent exceeds the nesting limit |
+| `E_PASSWORD_CONFIRMATION_INTENT_NON_FINITE` | 400 | Intent contains a non-finite number |
+| `E_PASSWORD_CONFIRMATION_INTENT_UNSAFE_INTEGER` | 400 | Intent contains an integer outside the safe range |
+| `E_PASSWORD_CONFIRMATION_INTENT_VALUE` | 400 | Intent contains values outside plain JSON |
+| `E_PASSWORD_CONFIRMATION_INTENT_REQUIRED` | 400 | No intent supplied |
+| `E_PASSWORD_CONFIRMATION_INVALID_DURATION` | 500 | Configured duration cannot be parsed or is outside its supported range |
+| `E_PASSWORD_CONFIRMATION_INVALID_THROTTLE` | 500 | Throttle configuration is not an object or false |
+| `E_PASSWORD_CONFIRMATION_INVALID_BUDGET` | 500 | Throttle budget is not a positive integer |
+| `E_PASSWORD_CONFIRMATION_INVALID_TABLE` | 500 | Configured table name is not a plain SQL identifier |
+| `E_PASSWORD_CONFIRMATION_INVALID_CALLBACK` | 500 | Configured callback is not a function |
+| `E_PASSWORD_CONFIRMATION_CALLBACKS_RESOLVED` | 500 | Callbacks registered after service resolution |
+| `E_PASSWORD_CONFIRMATION_CALLBACKS_REGISTERED` | 500 | A callback factory was already registered |
+| `E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED` | 500 | Throttling enabled without a limiter provider |
+| `E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED` | 500 | Provider has no resolved configuration |
+| `E_PASSWORD_CONFIRMATION_CALLBACK_CONFLICT` | 500 | Authorization supplied through both callback sources |
 
 Account Kit's `E_ACCOUNT_KIT_INVALID_SESSION` passes through unchanged: sign the user out.
 

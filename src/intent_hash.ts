@@ -8,7 +8,14 @@
  */
 
 import { createHash } from 'node:crypto'
-import { E_PASSWORD_CONFIRMATION_INVALID_REQUEST } from './errors.js'
+import {
+  E_PASSWORD_CONFIRMATION_INVALID_REQUEST,
+  E_PASSWORD_CONFIRMATION_INTENT_DEPTH,
+  E_PASSWORD_CONFIRMATION_INTENT_NON_FINITE,
+  E_PASSWORD_CONFIRMATION_INTENT_UNSAFE_INTEGER,
+  E_PASSWORD_CONFIRMATION_INTENT_VALUE,
+  E_PASSWORD_CONFIRMATION_INTENT_REQUIRED,
+} from './errors.js'
 import type { ConfirmationRequest } from './types.js'
 
 const MAX_NAME = 255
@@ -22,19 +29,19 @@ const MAX_NAME = 255
  * `__proto__` is an ordinary own key.
  */
 function serializeCanonicalIntent(value: unknown, depth = 0): string {
-  if (depth > 32) throw new E_PASSWORD_CONFIRMATION_INVALID_REQUEST('intent is nested too deeply')
+  if (depth > 32) throw new E_PASSWORD_CONFIRMATION_INTENT_DEPTH('intent is nested too deeply')
   if (value === null || typeof value === 'boolean' || typeof value === 'string') {
     return JSON.stringify(value)
   }
   if (typeof value === 'number') {
     if (!Number.isFinite(value))
-      throw new E_PASSWORD_CONFIRMATION_INVALID_REQUEST('non-finite number')
+      throw new E_PASSWORD_CONFIRMATION_INTENT_NON_FINITE('non-finite number')
     // Integers past 2^53 have already lost precision, so distinct ids could share a hash; send them
     // as strings. -0 hashes as 0 on purpose: canonical JSON writes both as "0", so a confirmation
     // for one may be spent with the other. Code can still tell them apart (Object.is, 1 / x), so an
     // action whose meaning depends on the sign must send it as a string.
     if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
-      throw new E_PASSWORD_CONFIRMATION_INVALID_REQUEST('unsafe integer; send it as a string')
+      throw new E_PASSWORD_CONFIRMATION_INTENT_UNSAFE_INTEGER('unsafe integer; send it as a string')
     }
     return JSON.stringify(value)
   }
@@ -45,15 +52,13 @@ function serializeCanonicalIntent(value: unknown, depth = 0): string {
   if (typeof value === 'object') {
     const prototype = Object.getPrototypeOf(value)
     if (prototype !== Object.prototype && prototype !== null) {
-      throw new E_PASSWORD_CONFIRMATION_INVALID_REQUEST(
-        'intent must contain plain JSON values only'
-      )
+      throw new E_PASSWORD_CONFIRMATION_INTENT_VALUE('intent must contain plain JSON values only')
     }
     const keys = Object.keys(value).sort()
     const record = value as Record<string, unknown>
     return `{${keys.map((key) => `${JSON.stringify(key)}:${serializeCanonicalIntent(record[key], depth + 1)}`).join(',')}}`
   }
-  throw new E_PASSWORD_CONFIRMATION_INVALID_REQUEST('intent must contain plain JSON values only')
+  throw new E_PASSWORD_CONFIRMATION_INTENT_VALUE('intent must contain plain JSON values only')
 }
 
 function requireBoundedName(value: unknown, field: string) {
@@ -70,7 +75,7 @@ export function buildConfirmationBinding(request: ConfirmationRequest) {
   const action = requireBoundedName(request.action, 'action')
   const scope = requireBoundedName(request.scope, 'scope')
   if (request.intent === undefined)
-    throw new E_PASSWORD_CONFIRMATION_INVALID_REQUEST('intent is required')
+    throw new E_PASSWORD_CONFIRMATION_INTENT_REQUIRED('intent is required')
   const intentHash = createHash('sha256')
     .update(serializeCanonicalIntent({ action, scope, intent: request.intent }))
     .digest('hex')

@@ -7,7 +7,10 @@
  * file that was distributed with this source code.
  */
 
-import { E_PASSWORD_CONFIRMATION_INVALID_CONFIG } from './errors.js'
+import {
+  E_PASSWORD_CONFIRMATION_CALLBACKS_RESOLVED,
+  E_PASSWORD_CONFIRMATION_CALLBACKS_REGISTERED,
+} from './errors.js'
 import type { PasswordConfirmationCallbacks } from './types.js'
 
 type CallbacksFactory = () => PasswordConfirmationCallbacks | Promise<PasswordConfirmationCallbacks>
@@ -57,12 +60,12 @@ export class PasswordConfirmationCallbackRegistry {
    */
   register(factory: CallbacksFactory): void {
     if (this.#resolved) {
-      throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG(
+      throw new E_PASSWORD_CONFIRMATION_CALLBACKS_RESOLVED(
         'callbacks must be registered before PasswordConfirmations is first resolved'
       )
     }
     if (this.#factory) {
-      throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG('callbacks are already registered')
+      throw new E_PASSWORD_CONFIRMATION_CALLBACKS_REGISTERED('callbacks are already registered')
     }
     this.#factory = factory
   }

@@ -44,12 +44,12 @@ flowchart TD
     B -->|No| X["Kit refusal before consume"]
     B -->|Yes| C{"consume: sign-in registered, request binds, authorize allows?"}
     A2["Caller already inside withCurrent calls consume(context, request)"] --> C
-    C -->|No| C2["E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED, E_PASSWORD_CONFIRMATION_INVALID_REQUEST (400) or E_PASSWORD_CONFIRMATION_FORBIDDEN; no update"]
+    C -->|No| C2["E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED, request-specific 400 code or E_PASSWORD_CONFIRMATION_FORBIDDEN; no update"]
     C -->|Yes| C3{"Non-empty string ID?"}
-    C3 -->|No| E
+    C3 -->|No| E2["E_PASSWORD_CONFIRMATION_REQUIRED; no identifier supplied"]
     C3 -->|Yes| U["Read time and live credential revision; conditional update"]
     U --> D{"exact row update count is 1?"}
-    D -->|No| E["E_PASSWORD_CONFIRMATION_REQUIRED"]
+    D -->|No| E["E_PASSWORD_CONFIRMATION_BINDING_REJECTED"]
     D -->|Yes| R{"Entry path?"}
     R -->|withConfirmation| F["run(context) in same trx"]
     R -->|consume| Y["Return to caller's callback; caller owns remaining writes"]

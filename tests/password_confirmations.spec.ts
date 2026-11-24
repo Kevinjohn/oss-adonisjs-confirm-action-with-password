@@ -68,7 +68,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
       await readCallResult(
         confirmations.withConfirmation(input, { ...request, confirmationId }, async () => {})
       ),
-      'E_PASSWORD_CONFIRMATION_REQUIRED'
+      'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
     )
   })
 
@@ -165,7 +165,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
         await readCallResult(
           confirmations.withConfirmation(input, { ...changed, confirmationId }, async () => {})
         ),
-        'E_PASSWORD_CONFIRMATION_REQUIRED'
+        'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
       )
     }
     await confirmations.withConfirmation(
@@ -211,7 +211,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
         })
       )
     const results = await Promise.all([spend(), spend()])
-    assert.deepEqual(results.sort(), ['E_PASSWORD_CONFIRMATION_REQUIRED', 'resolved'])
+    assert.deepEqual(results.sort(), ['E_PASSWORD_CONFIRMATION_BINDING_REJECTED', 'resolved'])
     assert.lengthOf(await fixture.db.from('effects').where('label', 'spent-twice'), 1)
   })
 
@@ -234,7 +234,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
           async () => {}
         )
       ),
-      'E_PASSWORD_CONFIRMATION_REQUIRED'
+      'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
     )
     // Issued under 5 minutes, spent by a process tightened to 2: the tighter window applies.
     assert.equal(
@@ -245,7 +245,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
           async () => {}
         )
       ),
-      'E_PASSWORD_CONFIRMATION_REQUIRED'
+      'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
     )
     await long.withConfirmation(
       input,
@@ -310,7 +310,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
       await readCallResult(
         confirmations.withConfirmation(other, { ...request, confirmationId }, async () => {})
       ),
-      'E_PASSWORD_CONFIRMATION_REQUIRED'
+      'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
     )
   })
 
@@ -331,7 +331,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
       await readCallResult(
         confirmations.withConfirmation(input, { ...request, confirmationId: early }, async () => {})
       ),
-      'E_PASSWORD_CONFIRMATION_REQUIRED'
+      'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
     )
     await confirmations.withConfirmation(
       input,
@@ -400,7 +400,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
       await readCallResult(
         confirmations.withConfirmation(kept, { ...request, confirmationId }, async () => {})
       ),
-      'E_PASSWORD_CONFIRMATION_REQUIRED'
+      'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
     )
     const fresh = await confirmations.confirmPassword(kept, { ...request, password: PW2 })
     await confirmations.withConfirmation(
@@ -583,7 +583,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
     assert.deepEqual(failures[0], failures[1])
     assert.deepEqual(failures[0], failures[2])
     assert.deepEqual(failures[0], {
-      code: 'E_PASSWORD_CONFIRMATION_REQUIRED',
+      code: 'E_PASSWORD_CONFIRMATION_BINDING_REJECTED',
       status: 403,
       message: 'Confirm this action again.',
     })
@@ -620,7 +620,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
           .makePasswordConfirmations()
           .withConfirmation(input, { ...request, confirmationId }, async () => {})
       ),
-      'E_PASSWORD_CONFIRMATION_REQUIRED'
+      'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
     )
   })
 
@@ -637,7 +637,9 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
             async () => void ran++
           )
         ),
-        'E_PASSWORD_CONFIRMATION_REQUIRED'
+        confirmationId
+          ? 'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
+          : 'E_PASSWORD_CONFIRMATION_REQUIRED'
       )
     }
     assert.equal(ran, 0)
@@ -670,7 +672,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
           async () => {}
         )
       ),
-      'E_PASSWORD_CONFIRMATION_REQUIRED'
+      'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
     )
   })
 
@@ -777,7 +779,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
           async () => {}
         )
       ),
-      'E_PASSWORD_CONFIRMATION_REQUIRED'
+      'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
     )
   })
 
