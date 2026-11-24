@@ -2,7 +2,7 @@
 
 ## Actors and boundaries
 
-- **Signed-in account holder**: an application user whose current Account Kit sign-in is represented by `CurrentAccountInput`. The package supports Account Kit 0.6.0 with the session strategy with session management on a server-side session store ([README requirements](../README.md#requirements)); access-token authentication has no registered sign-in row and is refused.
+- **Signed-in account holder**: an application user whose current Account Kit sign-in is represented by `CurrentAccountInput`. The package supports Account Kit 0.6.1 with the session strategy with session management on a server-side session store ([README requirements](../README.md#requirements)); access-token authentication has no registered sign-in row and is refused.
 - **Host application**: owns routes, request validation, same-origin/CSRF defences, UI, operation/resource naming (`action`/`scope`), authorisation in [`authorize`](US-CONFIRM-09-register-authorization.md), the exact `intent`, and any throttle route when package throttling is disabled. The package does not provide a browser UI or endpoints.
 - **Operator**: installs/configures the provider and migration, supplies host callbacks, and schedules pruning.
 
