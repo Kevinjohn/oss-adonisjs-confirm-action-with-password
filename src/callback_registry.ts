@@ -20,10 +20,24 @@ type CallbacksFactory = () => PasswordConfirmationCallbacks | Promise<PasswordCo
  * @example
  * ```ts
  * import { PasswordConfirmationCallbackRegistry } from '@kevinjohn/adonisjs-confirm-action-with-password'
+ * import type { ApplicationService } from '@adonisjs/core/types'
  *
- * // In your application's provider boot method.
- * const callbacks = await this.app.container.make(PasswordConfirmationCallbackRegistry)
- * callbacks.register(() => ({ authorize: authorizePasswordConfirmation }))
+ * export default class CompanyCallbacksProvider {
+ *   constructor(protected app: ApplicationService) {}
+ *
+ *   async boot() {
+ *     const callbacks = await this.app.container.make(PasswordConfirmationCallbackRegistry)
+ *     callbacks.register(() => ({
+ *       authorize: async ({ account, trx }, { scope }) => {
+ *         const company = await trx
+ *           .from('companies')
+ *           .where({ id: scope, owner_id: account.id })
+ *           .first()
+ *         return Boolean(company)
+ *       },
+ *     }))
+ *   }
+ * }
  * ```
  */
 export class PasswordConfirmationCallbackRegistry {
