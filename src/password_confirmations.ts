@@ -15,6 +15,9 @@ import type { CurrentAccountInput, Trx, UserId } from '@kevinjohn/adonisjs-accou
 import { buildConfirmationBinding } from './intent_hash.js'
 import {
   E_PASSWORD_CONFIRMATION_DENIED,
+  E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE,
+  E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING,
+  E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID,
   E_PASSWORD_CONFIRMATION_FORBIDDEN,
   E_PASSWORD_CONFIRMATION_REQUIRED,
   E_PASSWORD_CONFIRMATION_ACCOUNT_CHANGED,
@@ -80,9 +83,7 @@ export class PasswordConfirmations {
     const throttle = dependencies.config.throttle
     if (throttle) {
       if (!dependencies.limiter) {
-        throw new E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED(
-          'throttle needs @adonisjs/limiter; register its provider or set throttle: false'
-        )
+        throw new E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED()
       }
       // No blockDuration here: the store would block again each time a throttled retry crosses the
       // limit, extending the block for as long as the user keeps trying. #recordPasswordFailure is the only
@@ -205,6 +206,7 @@ export class PasswordConfirmations {
         await this.#assertConfirmationAllowed(context, request)
         return {
           userId: context.account.id,
+          hasPassword: context.account.hasPassword,
           // An account the Kit reports as passwordless cannot confirm with one, whatever is stored:
           // Account Kit's sign-in refuses it too. A null hash is a wrong password and counts as one.
           hash: context.account.hasPassword
@@ -217,12 +219,16 @@ export class PasswordConfirmations {
     // the budget (penalize checks then increments, which a burst races through).
     const throttleKeys = this.#buildThrottleKeys(issuanceSnapshot.userId)
     if (this.#throttle) await this.#reserveAttempt(throttleKeys)
-    let isPasswordCorrect: boolean
+    let refusal: InstanceType<typeof E_PASSWORD_CONFIRMATION_DENIED> | undefined
     try {
-      isPasswordCorrect =
-        typeof request.password === 'string' &&
-        issuanceSnapshot.hash !== null &&
-        (await this.#verifyPassword(issuanceSnapshot.hash, request.password))
+      if (typeof request.password !== 'string')
+        refusal = new E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID()
+      else if (!issuanceSnapshot.hasPassword)
+        refusal = new E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE()
+      else if (issuanceSnapshot.hash === null)
+        refusal = new E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING()
+      else if (!(await this.#verifyPassword(issuanceSnapshot.hash, request.password)))
+        refusal = new E_PASSWORD_CONFIRMATION_DENIED()
     } catch (error) {
       // An infrastructure fault is not a wrong guess: give the attempt back. If the refund fails
       // too, report both; whether the attempt is still charged is then unknown.
@@ -237,9 +243,9 @@ export class PasswordConfirmations {
       }
       throw error
     }
-    if (!isPasswordCorrect) {
+    if (refusal) {
       if (this.#throttle) await this.#recordPasswordFailure(throttleKeys)
-      throw new E_PASSWORD_CONFIRMATION_DENIED()
+      throw refusal
     }
     // The window runs from the check itself, not from the limiter reset that follows it.
     const verifiedAt = this.#readNow()

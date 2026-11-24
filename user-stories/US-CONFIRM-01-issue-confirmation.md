@@ -17,7 +17,7 @@ As a signed-in account holder, I want to confirm my password for a named sensiti
 - A correct password returns `confirmationId` and `expiresAt`; malformed/wrong password, stale verification, missing sign-in registry, refusal or exhausted throttle returns an error and issues nothing.
 - Default failed-attempt budget is 5 per account per minute, then a 20-minute block; `throttle: false` requires host throttling reserved before hash verification.
 
-- The service snapshots the current account input before either Kit transaction. A passwordless account, missing hash or non-string password follows the wrong-password path. The verifier runs outside the transaction. A successful check starts the window before limiter cleanup, then the service reacquires the same account, checks permission again and persists the deadline. The returned `expiresAt` is epoch milliseconds.
+- The service snapshots the current account input before either Kit transaction. A passwordless account, missing hash or non-string password has its own raw refusal (`E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE`, `E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING` or `E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID`). A verifier returning false throws `E_PASSWORD_CONFIRMATION_DENIED`. All four consume the same throttle attempt and deliberately share the public denied response to conceal password capability and verifier state. The verifier runs outside the transaction. A successful check starts the window before limiter cleanup, then the service reacquires the same account, checks permission again and persists the deadline. The returned `expiresAt` is epoch milliseconds.
 - Only the JSON projection contributes to the intent hash. Object keys sort by UTF-16 code units and array order matters. Unsupported values, sparse arrays, unsafe integers and nesting beyond depth 32 are refused. Negative zero hashes as zero. Use strings for identifiers outside the safe integer range. [Binding rules and edge cases](../tests/intent_hash.spec.ts)
 
 ## User flow
@@ -48,12 +48,19 @@ flowchart TD
     S1 -->|Pre-commit failure| X
     S1 -->|Committed with follow-up error| X1["Propagate Kit error before verification"]
     S1 -->|Success| T{"Package throttle on?"}
-    T -->|"No (throttle: false; host throttles in its own route)"| E["verify hash outside Kit transaction"]
+    T -->|"No (throttle: false; host throttles in its own route)"| E["Check password type, capability and hash; verify eligible password outside Kit transaction"]
     T -->|Yes| D{"reserveAttempt: block and budget allow?"}
     D -->|No| D2["Throttle refusal (429) or limiter fault; no hash run, no row issued"]
     D -->|Yes| E
     E --> F{"Verification outcome?"}
-    F -->|Wrong, non-string or no hash| G["Record completed failure if throttled; deny; no row"]
+    F -->|Non-string password| P1["E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID"]
+    F -->|Passwordless account| P2["E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE"]
+    F -->|Missing stored hash| P3["E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING"]
+    F -->|Verifier returned false| P4["E_PASSWORD_CONFIRMATION_DENIED"]
+    P1 --> G["Record completed failure if throttled; throw raw refusal; no row"]
+    P2 --> G
+    P3 --> G
+    P4 --> G
     F -->|Verifier throws| V["Refund reservation if throttled; rethrow (AggregateError if refund fails)"]
     F -->|Correct| W["Read verifiedAt; reset attempt and failure counts if throttled"]
     W --> H{"withCurrent stage 2 accepts same account, current sign-in and authorize?"}

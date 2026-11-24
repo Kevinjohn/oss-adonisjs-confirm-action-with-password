@@ -332,6 +332,8 @@ changes.
 
 ## Errors
 
+This section describes the unreleased exception API. For the installed v0.4.1 archive, use the [v0.4.1 error reference](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.4.1/README.md#errors).
+
 Match a specific exception with `instanceof errors.E_PASSWORD_CONFIRMATION_REQUIRED`, for example,
 or check its `code` against the corresponding value below.
 
@@ -363,6 +365,8 @@ or check its `code` against the corresponding value below.
 | `E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED` | 500 | Throttling enabled without a limiter provider |
 | `E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED` | 500 | Provider has no resolved configuration |
 | `E_PASSWORD_CONFIRMATION_CALLBACK_CONFLICT` | 500 | Authorization supplied through both callback sources |
+
+The raw `E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE`, `E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING` and `E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID` refusals each have HTTP status 403. Their handler deliberately emits `E_PASSWORD_CONFIRMATION_DENIED` to conceal account password capability and verifier state; each refusal still consumes one throttle attempt.
 
 Account Kit's `E_ACCOUNT_KIT_INVALID_SESSION` passes through unchanged: sign the user out.
 

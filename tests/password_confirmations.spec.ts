@@ -708,7 +708,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
     })
     assert.equal(
       await readCallResult(confirmations.confirmPassword(input, { ...request, password: PW })),
-      'E_PASSWORD_CONFIRMATION_DENIED'
+      'E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING'
     )
     // Fails closed before the hash, whatever the hash service would say.
     assert.equal(hashed, 0)
@@ -740,7 +740,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.6.1', (group) => {
     })
     assert.equal(
       await readCallResult(confirmations.confirmPassword(input, { ...request, password: PW })),
-      'E_PASSWORD_CONFIRMATION_DENIED'
+      'E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE'
     )
     assert.equal(hashed, 0)
   })

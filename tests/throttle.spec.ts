@@ -14,7 +14,13 @@ import { ExceptionHandler, type HttpContext } from '@adonisjs/core/http'
 import { test } from '@japa/runner'
 import type { Limiter } from '@adonisjs/limiter'
 import { PasswordConfirmations } from '../src/password_confirmations.js'
-import { E_PASSWORD_CONFIRMATION_THROTTLED } from '../src/errors.js'
+import {
+  E_PASSWORD_CONFIRMATION_THROTTLED,
+  E_PASSWORD_CONFIRMATION_DENIED,
+  E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE,
+  E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING,
+  E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID,
+} from '../src/errors.js'
 import { defineConfig } from '../src/define_config.js'
 import type { ConfirmationThrottle, PasswordConfirmationsConfig } from '../src/types.js'
 import type { Fixture } from './helpers.js'
@@ -129,6 +135,15 @@ test.group('Wrong-password throttling', (group) => {
         throw error
       }
     })
+    const passwordRefusals = [
+      E_PASSWORD_CONFIRMATION_DENIED,
+      E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE,
+      E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING,
+      E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID,
+    ]
+    server.getRouter().post('/password-refusal/:kind', ({ params }) => {
+      throw new passwordRefusals[Number(params.kind)]()
+    })
     await server.boot()
     const listener = createServer(server.handle.bind(server))
     listener.listen(0, '127.0.0.1')
@@ -139,6 +154,20 @@ test.group('Wrong-password throttling', (group) => {
         throw new Error('HTTP test listener did not start')
       const send = (accept: string) =>
         fetch(`http://127.0.0.1:${address.port}/confirm`, { method: 'POST', headers: { accept } })
+      for (const [kind, Refusal] of passwordRefusals.entries()) {
+        assert.equal(new Refusal().code, Refusal.code)
+        const projected = await fetch(`http://127.0.0.1:${address.port}/password-refusal/${kind}`, {
+          method: 'POST',
+          headers: { accept: 'application/vnd.api+json' },
+        })
+        assert.equal(projected.status, 403)
+        const body = (await projected.json()) as { errors: { code: string }[] }
+        assert.deepEqual(body, {
+          errors: [
+            { title: 'Incorrect password.', code: 'E_PASSWORD_CONFIRMATION_DENIED', status: 403 },
+          ],
+        })
+      }
       const denied = await send('application/json')
       assert.equal(denied.status, 403)
       assert.isNull(denied.headers.get('retry-after'))
@@ -379,7 +408,7 @@ test.group('Wrong-password throttling', (group) => {
             password: password as unknown as string,
           })
         ),
-        'E_PASSWORD_CONFIRMATION_DENIED'
+        'E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID'
       )
     }
     // Refused before the hash: a non-string never reaches the hash service.

@@ -45,15 +45,13 @@ export default class PasswordConfirmationsProvider {
         'password_confirmations'
       )
       if (!config?.windowMs) {
-        throw new E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED('export default defineConfig({...})')
+        throw new E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED()
       }
       const callbacks = await callbackRegistry.resolve()
       const authorize = callbacks?.authorize ?? undefined
       if (authorize !== undefined) {
         if (config.authorize) {
-          throw new E_PASSWORD_CONFIRMATION_CALLBACK_CONFLICT(
-            'authorize is set in both the config and password_confirmations.callbacks'
-          )
+          throw new E_PASSWORD_CONFIRMATION_CALLBACK_CONFLICT()
         }
         if (typeof authorize !== 'function') {
           throw new E_PASSWORD_CONFIRMATION_INVALID_CALLBACK('authorize must be a function')

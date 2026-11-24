@@ -8,6 +8,12 @@
  */
 
 import { Exception } from '@adonisjs/core/exceptions'
+import { ExceptionHandler, type HttpContext } from '@adonisjs/core/http'
+
+/** Keeps password capability and verifier state private even when the host enables debug pages. */
+class PasswordRefusalHandler extends ExceptionHandler {
+  protected debug = false
+}
 
 /** The request supplies no confirmation identifier. */
 export class PasswordConfirmationRequiredException extends Exception {
@@ -28,6 +34,16 @@ export class PasswordConfirmationDeniedException extends Exception {
 
   constructor() {
     super()
+  }
+
+  /** Renders one password refusal without exposing password capability or verifier state. */
+  handle(_error: this, ctx: HttpContext) {
+    // Hide whether the account has a password, its stored hash is present, or the supplied guess matched.
+    const response = new Exception(PasswordConfirmationDeniedException.message, {
+      code: PasswordConfirmationDeniedException.code,
+      status: PasswordConfirmationDeniedException.status,
+    })
+    return new PasswordRefusalHandler().handle(response, ctx)
   }
 }
 
@@ -106,17 +122,27 @@ export const E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED = SessionRegistry
 export const E_PASSWORD_CONFIRMATION_INVALID_CONFIG = InvalidPasswordConfirmationsConfigException
 
 /** The account changed between password verification and issuance. */
-export class PasswordConfirmationAccountChangedException extends PasswordConfirmationRequiredException {
+export class PasswordConfirmationAccountChangedException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_ACCOUNT_CHANGED'
   static status = 403
+  static message = 'Confirm this action again.'
+
+  constructor() {
+    super()
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_ACCOUNT_CHANGED = PasswordConfirmationAccountChangedException
 
 /** No spendable confirmation matches this account, sign-in, credential and request. */
-export class PasswordConfirmationBindingRejectedException extends PasswordConfirmationRequiredException {
+export class PasswordConfirmationBindingRejectedException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_BINDING_REJECTED'
   static status = 403
+  static message = 'Confirm this action again.'
+
+  constructor() {
+    super()
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_BINDING_REJECTED = PasswordConfirmationBindingRejectedException
@@ -125,6 +151,11 @@ export const E_PASSWORD_CONFIRMATION_BINDING_REJECTED = PasswordConfirmationBind
 export class PasswordConfirmationIntentDepthException extends InvalidPasswordConfirmationRequestException {
   static code = 'E_PASSWORD_CONFIRMATION_INTENT_DEPTH'
   static status = 400
+  static message = 'Invalid password confirmation request: intent is nested too deeply'
+
+  constructor() {
+    super('intent is nested too deeply')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_INTENT_DEPTH = PasswordConfirmationIntentDepthException
@@ -133,6 +164,11 @@ export const E_PASSWORD_CONFIRMATION_INTENT_DEPTH = PasswordConfirmationIntentDe
 export class PasswordConfirmationNonFiniteIntentException extends InvalidPasswordConfirmationRequestException {
   static code = 'E_PASSWORD_CONFIRMATION_INTENT_NON_FINITE'
   static status = 400
+  static message = 'Invalid password confirmation request: non-finite number'
+
+  constructor() {
+    super('non-finite number')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_INTENT_NON_FINITE =
@@ -142,6 +178,11 @@ export const E_PASSWORD_CONFIRMATION_INTENT_NON_FINITE =
 export class PasswordConfirmationUnsafeIntegerException extends InvalidPasswordConfirmationRequestException {
   static code = 'E_PASSWORD_CONFIRMATION_INTENT_UNSAFE_INTEGER'
   static status = 400
+  static message = 'Invalid password confirmation request: unsafe integer; send it as a string'
+
+  constructor() {
+    super('unsafe integer; send it as a string')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_INTENT_UNSAFE_INTEGER =
@@ -151,6 +192,12 @@ export const E_PASSWORD_CONFIRMATION_INTENT_UNSAFE_INTEGER =
 export class PasswordConfirmationIntentValueException extends InvalidPasswordConfirmationRequestException {
   static code = 'E_PASSWORD_CONFIRMATION_INTENT_VALUE'
   static status = 400
+  static message =
+    'Invalid password confirmation request: intent must contain plain JSON values only'
+
+  constructor() {
+    super('intent must contain plain JSON values only')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_INTENT_VALUE = PasswordConfirmationIntentValueException
@@ -159,6 +206,11 @@ export const E_PASSWORD_CONFIRMATION_INTENT_VALUE = PasswordConfirmationIntentVa
 export class PasswordConfirmationIntentRequiredException extends InvalidPasswordConfirmationRequestException {
   static code = 'E_PASSWORD_CONFIRMATION_INTENT_REQUIRED'
   static status = 400
+  static message = 'Invalid password confirmation request: intent is required'
+
+  constructor() {
+    super('intent is required')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_INTENT_REQUIRED = PasswordConfirmationIntentRequiredException
@@ -175,6 +227,11 @@ export const E_PASSWORD_CONFIRMATION_INVALID_DURATION = PasswordConfirmationInva
 export class PasswordConfirmationInvalidThrottleException extends InvalidPasswordConfirmationsConfigException {
   static code = 'E_PASSWORD_CONFIRMATION_INVALID_THROTTLE'
   static status = 500
+  static message = 'Invalid config/password_confirmations.ts: throttle must be an object or false'
+
+  constructor() {
+    super('throttle must be an object or false')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_INVALID_THROTTLE = PasswordConfirmationInvalidThrottleException
@@ -183,6 +240,12 @@ export const E_PASSWORD_CONFIRMATION_INVALID_THROTTLE = PasswordConfirmationInva
 export class PasswordConfirmationInvalidBudgetException extends InvalidPasswordConfirmationsConfigException {
   static code = 'E_PASSWORD_CONFIRMATION_INVALID_BUDGET'
   static status = 500
+  static message =
+    'Invalid config/password_confirmations.ts: throttle.requests must be a positive integer'
+
+  constructor() {
+    super('throttle.requests must be a positive integer')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_INVALID_BUDGET = PasswordConfirmationInvalidBudgetException
@@ -207,6 +270,12 @@ export const E_PASSWORD_CONFIRMATION_INVALID_CALLBACK = PasswordConfirmationInva
 export class PasswordConfirmationCallbacksResolvedException extends InvalidPasswordConfirmationsConfigException {
   static code = 'E_PASSWORD_CONFIRMATION_CALLBACKS_RESOLVED'
   static status = 500
+  static message =
+    'Invalid config/password_confirmations.ts: callbacks must be registered before PasswordConfirmations is first resolved'
+
+  constructor() {
+    super('callbacks must be registered before PasswordConfirmations is first resolved')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_CALLBACKS_RESOLVED =
@@ -216,6 +285,11 @@ export const E_PASSWORD_CONFIRMATION_CALLBACKS_RESOLVED =
 export class PasswordConfirmationCallbacksRegisteredException extends InvalidPasswordConfirmationsConfigException {
   static code = 'E_PASSWORD_CONFIRMATION_CALLBACKS_REGISTERED'
   static status = 500
+  static message = 'Invalid config/password_confirmations.ts: callbacks are already registered'
+
+  constructor() {
+    super('callbacks are already registered')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_CALLBACKS_REGISTERED =
@@ -225,6 +299,12 @@ export const E_PASSWORD_CONFIRMATION_CALLBACKS_REGISTERED =
 export class PasswordConfirmationLimiterRequiredException extends InvalidPasswordConfirmationsConfigException {
   static code = 'E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED'
   static status = 500
+  static message =
+    'Invalid config/password_confirmations.ts: throttle needs @adonisjs/limiter; register its provider or set throttle: false'
+
+  constructor() {
+    super('throttle needs @adonisjs/limiter; register its provider or set throttle: false')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED = PasswordConfirmationLimiterRequiredException
@@ -233,6 +313,11 @@ export const E_PASSWORD_CONFIRMATION_LIMITER_REQUIRED = PasswordConfirmationLimi
 export class PasswordConfirmationConfigRequiredException extends InvalidPasswordConfirmationsConfigException {
   static code = 'E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED'
   static status = 500
+  static message = 'Invalid config/password_confirmations.ts: export default defineConfig({...})'
+
+  constructor() {
+    super('export default defineConfig({...})')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED = PasswordConfirmationConfigRequiredException
@@ -241,7 +326,40 @@ export const E_PASSWORD_CONFIRMATION_CONFIG_REQUIRED = PasswordConfirmationConfi
 export class PasswordConfirmationCallbackConflictException extends InvalidPasswordConfirmationsConfigException {
   static code = 'E_PASSWORD_CONFIRMATION_CALLBACK_CONFLICT'
   static status = 500
+  static message =
+    'Invalid config/password_confirmations.ts: authorize is set in both the config and password_confirmations.callbacks'
+
+  constructor() {
+    super('authorize is set in both the config and password_confirmations.callbacks')
+  }
 }
 
 export const E_PASSWORD_CONFIRMATION_CALLBACK_CONFLICT =
   PasswordConfirmationCallbackConflictException
+
+/** The account has no password sign-in capability. */
+export class PasswordConfirmationPasswordUnavailableException extends PasswordConfirmationDeniedException {
+  static code = 'E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE'
+  static status = 403
+}
+
+export const E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE =
+  PasswordConfirmationPasswordUnavailableException
+
+/** The account has password sign-in capability but no stored verifier hash. */
+export class PasswordConfirmationPasswordHashMissingException extends PasswordConfirmationDeniedException {
+  static code = 'E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING'
+  static status = 403
+}
+
+export const E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING =
+  PasswordConfirmationPasswordHashMissingException
+
+/** The supplied password is not a string. */
+export class PasswordConfirmationPasswordInputInvalidException extends PasswordConfirmationDeniedException {
+  static code = 'E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID'
+  static status = 403
+}
+
+export const E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID =
+  PasswordConfirmationPasswordInputInvalidException

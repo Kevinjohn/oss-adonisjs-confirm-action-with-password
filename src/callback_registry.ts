@@ -60,12 +60,10 @@ export class PasswordConfirmationCallbackRegistry {
    */
   register(factory: CallbacksFactory): void {
     if (this.#resolved) {
-      throw new E_PASSWORD_CONFIRMATION_CALLBACKS_RESOLVED(
-        'callbacks must be registered before PasswordConfirmations is first resolved'
-      )
+      throw new E_PASSWORD_CONFIRMATION_CALLBACKS_RESOLVED()
     }
     if (this.#factory) {
-      throw new E_PASSWORD_CONFIRMATION_CALLBACKS_REGISTERED('callbacks are already registered')
+      throw new E_PASSWORD_CONFIRMATION_CALLBACKS_REGISTERED()
     }
     this.#factory = factory
   }

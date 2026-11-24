@@ -46,11 +46,11 @@ function resolveThrottle(throttle: PasswordConfirmationsConfig['throttle']) {
     throttle !== null &&
     (typeof throttle !== 'object' || Array.isArray(throttle))
   ) {
-    throw new E_PASSWORD_CONFIRMATION_INVALID_THROTTLE('throttle must be an object or false')
+    throw new E_PASSWORD_CONFIRMATION_INVALID_THROTTLE()
   }
   const resolved = { requests: 5, duration: '1 minute', blockDuration: '20 minutes', ...throttle }
   if (!Number.isSafeInteger(resolved.requests) || resolved.requests < 1) {
-    throw new E_PASSWORD_CONFIRMATION_INVALID_BUDGET('throttle.requests must be a positive integer')
+    throw new E_PASSWORD_CONFIRMATION_INVALID_BUDGET()
   }
   for (const field of ['duration', 'blockDuration'] as const) {
     // The limiter counts whole seconds, so a sub-second value becomes 0 and never expires.

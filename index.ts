@@ -15,6 +15,12 @@ export { PasswordConfirmations } from './src/password_confirmations.js'
 export { PasswordConfirmationCallbackRegistry } from './src/callback_registry.js'
 export type { PasswordConfirmationsDependencies } from './src/password_confirmations.js'
 export {
+  PasswordConfirmationPasswordUnavailableException,
+  E_PASSWORD_CONFIRMATION_PASSWORD_UNAVAILABLE,
+  PasswordConfirmationPasswordHashMissingException,
+  E_PASSWORD_CONFIRMATION_PASSWORD_HASH_MISSING,
+  PasswordConfirmationPasswordInputInvalidException,
+  E_PASSWORD_CONFIRMATION_PASSWORD_INPUT_INVALID,
   PasswordConfirmationAccountChangedException,
   E_PASSWORD_CONFIRMATION_ACCOUNT_CHANGED,
   PasswordConfirmationBindingRejectedException,

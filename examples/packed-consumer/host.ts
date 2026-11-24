@@ -247,7 +247,11 @@ try {
       publicService.withConfirmation(input, consumeRequest, async () => {
         throw new Error('replayed callback must never run')
       }),
-    errors.E_PASSWORD_CONFIRMATION_REQUIRED
+    (error: unknown) => {
+      assert.ok(error instanceof errors.E_PASSWORD_CONFIRMATION_BINDING_REJECTED)
+      assert.equal(error.code, 'E_PASSWORD_CONFIRMATION_BINDING_REJECTED')
+      return true
+    }
   )
   assert.equal((await db.from('effects')).length, 1)
   console.log('packed layout, configure, migrations, service identity, issue and single spend ok')
