@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Use the existing `E_PASSWORD_CONFIRMATION_*` exports at package exception throw sites and show
+  how to catch them through the public `errors` namespace. All previous exports remain available.
+- Add type-checked usage examples to the configuration helper, confirmation service and callback
+  registry API documentation.
+
 ## 0.4.1 - 2026-11-24
 
 - Clarify setup helper names, duration conversion and the authorization callback loader.

@@ -35,13 +35,13 @@ Scope: package limiter-enabled path after the first `withCurrent` stage. The exc
 ```mermaid
 flowchart TD
     A["confirmPassword: build account throttle keys"] --> B{"reserveAttempt: active block or exhausted budget?"}
-    B -->|Yes| C["Throw PasswordConfirmationThrottledException"]
+    B -->|Yes| C["Throw E_PASSWORD_CONFIRMATION_THROTTLED"]
     C --> D["Hand off retryAfterSeconds to host exception handler"]
     B -->|Limiter fault| L["Propagate limiter error"]
     B -->|No, reserved| E{"Password verification outcome?"}
     E -->|Wrong| F{"recordPasswordFailure reaches requests?"}
     F -->|Yes| G["Set block key; delete attempt and failure counts"]
-    G --> H["Throw PasswordConfirmationDeniedException"]
+    G --> H["Throw E_PASSWORD_CONFIRMATION_DENIED"]
     F -->|No| H
     E -->|Throws| I["Refund attempt; rethrow, or AggregateError if refund fails"]
     E -->|Correct| J["Record verifiedAt; reset attempt and failure counts"]

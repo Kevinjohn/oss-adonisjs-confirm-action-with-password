@@ -14,7 +14,7 @@ import { ExceptionHandler, type HttpContext } from '@adonisjs/core/http'
 import { test } from '@japa/runner'
 import type { Limiter } from '@adonisjs/limiter'
 import { PasswordConfirmations } from '../src/password_confirmations.js'
-import { PasswordConfirmationThrottledException } from '../src/errors.js'
+import { E_PASSWORD_CONFIRMATION_THROTTLED } from '../src/errors.js'
 import { defineConfig } from '../src/define_config.js'
 import type { ConfirmationThrottle, PasswordConfirmationsConfig } from '../src/types.js'
 import type { Fixture } from './helpers.js'
@@ -36,7 +36,7 @@ class HostExceptionHandler extends ExceptionHandler {
   protected debug = false
 
   async handle(error: unknown, ctx: HttpContext) {
-    if (error instanceof PasswordConfirmationThrottledException) {
+    if (error instanceof E_PASSWORD_CONFIRMATION_THROTTLED) {
       ctx.response.header('Retry-After', String(error.retryAfterSeconds))
     }
     return super.handle(error, ctx)
@@ -124,7 +124,7 @@ test.group('Wrong-password throttling', (group) => {
       try {
         return await confirmations.confirmPassword(input, { ...request, password: 'nope' })
       } catch (error) {
-        if (error instanceof PasswordConfirmationThrottledException)
+        if (error instanceof E_PASSWORD_CONFIRMATION_THROTTLED)
           actualRetryAfter = error.retryAfterSeconds
         throw error
       }

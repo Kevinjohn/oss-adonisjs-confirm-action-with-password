@@ -59,7 +59,7 @@ flowchart TD
     W --> H{"withCurrent stage 2 accepts same account, current sign-in and authorize?"}
     H -->|No| X
     H -->|Yes| I{"issuedAt before verifiedAt + windowMs?"}
-    I -->|No| J["PasswordConfirmationStaleException; no row issued"]
+    I -->|No| J["E_PASSWORD_CONFIRMATION_STALE; no row issued"]
     I -->|Yes| K["Read live revision; delete this sign-in's spent/expired rows; insert and return id/expiry from callback"]
     K --> Q{"Account Kit transaction outcome?"}
     Q -->|Pre-commit failure| X

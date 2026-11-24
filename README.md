@@ -88,7 +88,7 @@ See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm
 
 ```ts
 import passwordConfirmations from '@kevinjohn/adonisjs-confirm-action-with-password/services/main'
-import { PasswordConfirmationForbiddenException } from '@kevinjohn/adonisjs-confirm-action-with-password'
+import { errors } from '@kevinjohn/adonisjs-confirm-action-with-password'
 
 // POST /confirmations: password -> confirmation
 const { confirmationId, expiresAt } = await passwordConfirmations.confirmPassword(input, {
@@ -109,7 +109,7 @@ await passwordConfirmations.withConfirmation(
       .forUpdate()
       .first()
     // Throwing rolls the spend back with the write, so the confirmation stays usable.
-    if (!owned) throw new PasswordConfirmationForbiddenException()
+    if (!owned) throw new errors.E_PASSWORD_CONFIRMATION_FORBIDDEN()
     await trx.from('companies').where('id', companyId).update({ owner_id: toUserId })
   }
 )
@@ -332,6 +332,9 @@ changes.
 
 ## Errors
 
+Match a specific exception with `instanceof errors.E_PASSWORD_CONFIRMATION_REQUIRED`, for example,
+or check its `code` against the corresponding value below.
+
 | Code                                                | Status | Meaning                                                                     |
 | --------------------------------------------------- | ------ | --------------------------------------------------------------------------- |
 | `E_PASSWORD_CONFIRMATION_REQUIRED`                  | 403    | Missing, spent, expired, or bound to another sign-in, credential or request |
@@ -352,11 +355,11 @@ the host's control. Non-HTTP callers can still read the exception's `retryAfterS
 
 ```ts
 import { ExceptionHandler, type HttpContext } from '@adonisjs/core/http'
-import { PasswordConfirmationThrottledException } from '@kevinjohn/adonisjs-confirm-action-with-password'
+import { errors } from '@kevinjohn/adonisjs-confirm-action-with-password'
 
 export default class HttpExceptionHandler extends ExceptionHandler {
   async handle(error: unknown, ctx: HttpContext) {
-    if (error instanceof PasswordConfirmationThrottledException) {
+    if (error instanceof errors.E_PASSWORD_CONFIRMATION_THROTTLED) {
       ctx.response.header('Retry-After', String(error.retryAfterSeconds))
     }
     return super.handle(error, ctx)

@@ -38,7 +38,7 @@ Scope: callback registration and provider merge. Issuance and spending call the 
 flowchart TD
     A["PasswordConfirmationsProvider.register binds registry and service singletons"] --> B{"Host provider supplies a factory?"}
     B -->|Yes| C["Host boot resolves password_confirmations.callbacks; calls register"]
-    C -->|Second or late registration| X["Throw InvalidPasswordConfirmationsConfigException"]
+    C -->|Second or late registration| X["Throw E_PASSWORD_CONFIRMATION_INVALID_CONFIG"]
     C -->|Accepted| D["Store factory"]
     D --> E["First PasswordConfirmations resolution checks config.windowMs"]
     B -->|No| E

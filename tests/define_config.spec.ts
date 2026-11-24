@@ -9,7 +9,7 @@
 
 import { test } from '@japa/runner'
 import { defineConfig } from '../src/define_config.js'
-import { InvalidPasswordConfirmationsConfigException } from '../src/errors.js'
+import { E_PASSWORD_CONFIRMATION_INVALID_CONFIG } from '../src/errors.js'
 
 /** Runs `defineConfig` with a value its types forbid, as an untyped host config would. */
 function defineUntyped(config: unknown) {
@@ -21,7 +21,7 @@ function refusal(config: unknown) {
   try {
     defineUntyped(config)
   } catch (error) {
-    if (error instanceof InvalidPasswordConfirmationsConfigException) return error
+    if (error instanceof E_PASSWORD_CONFIRMATION_INVALID_CONFIG) return error
     throw error
   }
   throw new Error('defineConfig accepted the config')
