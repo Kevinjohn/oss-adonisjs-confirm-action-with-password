@@ -118,6 +118,26 @@ test.group('defineConfig', () => {
     }
   })
 
+  test('refuses non-finite window and throttle durations without a parser cause', ({ assert }) => {
+    for (const duration of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      for (const [config, reason] of [
+        [{ window: duration }, /window must be a positive duration/],
+        [
+          { throttle: { duration } },
+          /throttle\.duration must be a duration of at least one second/,
+        ],
+        [
+          { throttle: { blockDuration: duration } },
+          /throttle\.blockDuration must be a duration of at least one second/,
+        ],
+      ] as const) {
+        const error = refusal(config)
+        assert.match(error.message, reason)
+        assert.isUndefined(error.cause)
+      }
+    }
+  })
+
   test('keeps the duration parser error as the cause', ({ assert }) => {
     for (const [config, field] of [
       [{ window: 'soon' }, /window must be a positive duration/],

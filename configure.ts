@@ -36,7 +36,7 @@ async function inspect<T>(path: string, read: () => Promise<T>): Promise<T | und
 }
 
 /** Configure does not boot the app; read Lucid's primary connection config without booting it. */
-async function migrationSettings(command: Configure) {
+async function resolveMigrationSettings(command: Configure) {
   const app = command.app
   let database = app.config?.get<DatabaseConfig>('database')
   if (!database) {
@@ -109,7 +109,7 @@ export async function configure(command: Configure) {
     )
     return
   }
-  const { directories, naturalSort } = await migrationSettings(command)
+  const { directories, naturalSort } = await resolveMigrationSettings(command)
   // Lucid runs each path in order, sorting the files within it.
   const migrations: { directory: string; name: string }[] = []
   for (const directory of directories) {
@@ -121,7 +121,7 @@ export async function configure(command: Configure) {
     for (const file of files)
       migrations.push({ directory, name: relative(directory, file.absPath) })
   }
-  const pathOf = (migration: { directory: string; name: string }) =>
+  const buildMigrationPath = (migration: { directory: string; name: string }) =>
     join(migration.directory, migration.name)
   const suffix = '_create_password_confirmations_table'
   const sessionsSuffix = '_account_kit_create_account_sessions'
@@ -132,7 +132,7 @@ export async function configure(command: Configure) {
   )
   if (jsonMigration) {
     throw new RuntimeException(
-      `password_confirmations: ${pathOf(jsonMigration)} is JSON and cannot run as a migration; install a schema module manually and check migration history before rerunning configure`
+      `password_confirmations: ${buildMigrationPath(jsonMigration)} is JSON and cannot run as a migration; install a schema module manually and check migration history before rerunning configure`
     )
   }
   const existingMigrations = migrations.filter(({ name }) => hasSuffix(name, suffix))
@@ -200,15 +200,16 @@ export async function configure(command: Configure) {
     }
   }
   // `defineConfig` fills in an absent key with its default, so absence matches the default flag.
-  const configKey = (key: string, value: string, fallback: string) => (source: string) =>
-    source.includes(`${key}: '${value}'`) ||
-    (value === fallback && !new RegExp(`\\b${key}\\s*:`).test(source))
+  const createConfigKeyMatcher =
+    (key: string, value: string, fallback: string) => (source: string) =>
+      source.includes(`${key}: '${value}'`) ||
+      (value === fallback && !new RegExp(`\\b${key}\\s*:`).test(source))
   await warnIfExistingConfigDiffers(command.app.configPath('password_confirmations.ts'), [
-    configKey('table', tableName, 'password_confirmations'),
-    configKey('usersTable', usersTable, 'users'),
+    createConfigKeyMatcher('table', tableName, 'password_confirmations'),
+    createConfigKeyMatcher('usersTable', usersTable, 'users'),
   ])
   if (existingConfirmationMigration) {
-    await warnIfExistingConfigDiffers(pathOf(existingConfirmationMigration), [
+    await warnIfExistingConfigDiffers(buildMigrationPath(existingConfirmationMigration), [
       `tableName = '${tableName}'`,
       `inTable('${usersTable}')`,
       userIdColumns[userIdType],
@@ -232,7 +233,7 @@ export async function configure(command: Configure) {
         `password_confirmations: ${existingConfirmationMigration.name} must sort after ${sessionsMigration.name}; check migration history before making any changes`
       )
     }
-    command.logger.info(`Skipped ${pathOf(existingConfirmationMigration)}`)
+    command.logger.info(`Skipped ${buildMigrationPath(existingConfirmationMigration)}`)
   } else if (destination) {
     await codemods.makeUsingStub(stubsRoot, 'migrations/create_password_confirmations_table.stub', {
       migration: {

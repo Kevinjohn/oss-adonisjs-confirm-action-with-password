@@ -1,6 +1,6 @@
 # US-CONFIRM-09 — Configure operation authorisation
 
-As a host application developer, I want to provide the service with the application's authorisation policy so that it checks permission for the operation at issuance and spend.
+As a host application developer, I want to provide the service with an authorization callback so that it checks permission for the operation at issuance and spend.
 
 **Status:** Operator.
 **Access:** Host developer who controls package config or provider boot. Provider registration requires access to the AdonisJS container before the service is first resolved.
@@ -11,10 +11,10 @@ As a host application developer, I want to provide the service with the applicat
 
 ## Acceptance criteria
 
-- The generated config includes `authorize: async () => true`. Remove that setting to supply the callback via the registry. Configure preserves an existing config on reruns.
+- The generated config includes `authorize: async () => true`. Remove that setting to supply the authorization callback via the registry. Configure preserves an existing config on reruns.
 - `register(factory)` takes one zero-argument factory that returns `{ authorize? }` synchronously or through a promise. List the host provider before any provider whose `boot()` resolves `PasswordConfirmations`. The registry rejects a second registration and rejects registration after resolution begins. The provider calls the factory at first service resolution and the registry caches that promise, including any rejection.
 - Service resolution rejects a callback supplied in both places or a non-function registry `authorize`, with `E_PASSWORD_CONFIRMATION_INVALID_CONFIG`. An absent callback is allowed. The service defaults to allowing the permission check when both sources omit it.
-- The callback receives `KitContext` and `{ action, scope, intent }`. It runs in the Kit transaction at both issuance stages and during spend. Only literal `true` permits the operation. Use the supplied transaction for reads, leave the intent unchanged and keep the callback safe to rerun.
+- The authorization callback receives `KitContext` and `{ action, scope, intent }`. It runs in the Kit transaction at both issuance stages and during spend. Only literal `true` permits the operation. Use the supplied transaction for reads, leave the intent unchanged and keep the callback safe to rerun.
 
 ## User flow
 
