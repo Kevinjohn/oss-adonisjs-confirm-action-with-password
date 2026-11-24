@@ -12,18 +12,22 @@ import { InvalidPasswordConfirmationsConfigException } from './errors.js'
 import { isSqlIdentifier } from './sql_identifier.js'
 import type { PasswordConfirmationsConfig, ResolvedPasswordConfirmationsConfig } from './types.js'
 
-/** Parses a duration option, keeping the parser's error as the cause of the diagnostic. */
-function parseDuration(value: unknown, parse: (value: string | number) => number, reason: string) {
-  const invalid = (cause?: unknown) => {
+/** Converts a duration into the parser's units and wraps parser errors with their cause. */
+function convertDurationToUnits(
+  value: unknown,
+  parse: (value: string | number) => number,
+  reason: string
+) {
+  const createInvalidDurationException = (cause?: unknown) => {
     const error = new InvalidPasswordConfirmationsConfigException(reason)
     if (cause !== undefined) error.cause = cause
     return error
   }
-  if (typeof value !== 'string' && typeof value !== 'number') throw invalid()
+  if (typeof value !== 'string' && typeof value !== 'number') throw createInvalidDurationException()
   try {
     return parse(value)
   } catch (error) {
-    throw invalid(error)
+    throw createInvalidDurationException(error)
   }
 }
 
@@ -46,7 +50,7 @@ function resolveThrottle(throttle: PasswordConfirmationsConfig['throttle']) {
   for (const field of ['duration', 'blockDuration'] as const) {
     // The limiter counts whole seconds, so a sub-second value becomes 0 and never expires.
     const reason = `throttle.${field} must be a duration of at least one second`
-    const seconds = parseDuration(resolved[field], string.seconds.parse, reason)
+    const seconds = convertDurationToUnits(resolved[field], string.seconds.parse, reason)
     if (!Number.isSafeInteger(seconds) || seconds < 1) {
       throw new InvalidPasswordConfirmationsConfigException(reason)
     }
@@ -61,7 +65,7 @@ export function defineConfig(
   if (typeof config !== 'object' || config === null) {
     throw new InvalidPasswordConfirmationsConfigException('the config must be an object')
   }
-  const windowMs = parseDuration(
+  const windowMs = convertDurationToUnits(
     config.window ?? '5m',
     string.milliseconds.parse,
     'window must be a positive duration'

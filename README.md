@@ -145,10 +145,10 @@ only, or resolving the service throws `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` n
 
 ### Registering callbacks from a provider
 
-A config file that imports application services runs that code whenever the config loads. Register
-`authorize` from your own provider's `boot()` instead; the factory runs once, when
-`PasswordConfirmations` is first resolved, and must be registered before then. List the provider
-before any provider whose `boot()` resolves this service.
+A config file that imports application services runs that code whenever the config loads. To load
+`authorize` on first use, register a callback loader from your own provider's `boot()`. The loader
+runs once, when `PasswordConfirmations` is first resolved. List your provider before any provider
+whose `boot()` resolves this service.
 
 The generated `config/password_confirmations.ts` already sets `authorize`; delete that line when you
 register `authorize` here.
