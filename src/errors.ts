@@ -14,6 +14,10 @@ export class PasswordConfirmationRequiredException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_REQUIRED'
   static status = 403
   static message = 'Confirm this action again.'
+
+  constructor() {
+    super()
+  }
 }
 
 /** The password did not match. It already counts against the built-in per-account throttle. */
@@ -21,6 +25,10 @@ export class PasswordConfirmationDeniedException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_DENIED'
   static status = 403
   static message = 'Incorrect password.'
+
+  constructor() {
+    super()
+  }
 }
 
 /** Too many wrong passwords for this account; retry after `retryAfterSeconds`. */
@@ -38,6 +46,10 @@ export class PasswordConfirmationStaleException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_STALE'
   static status = 403
   static message = 'Confirm this action again.'
+
+  constructor() {
+    super()
+  }
 }
 
 /** The host authorisation callback (`authorize`) refused the operation. */
@@ -45,6 +57,10 @@ export class PasswordConfirmationForbiddenException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_FORBIDDEN'
   static status = 403
   static message = 'This action is not allowed.'
+
+  constructor() {
+    super()
+  }
 }
 
 /** `action`, `scope` or `intent` is malformed. */
@@ -65,6 +81,10 @@ export class SessionRegistryRequiredException extends Exception {
   static status = 500
   static message =
     'Password confirmations need Account Kit session login with sessionManagement enabled (no signInId).'
+
+  constructor() {
+    super()
+  }
 }
 
 /** `config/password_confirmations.ts` is missing or invalid. */
