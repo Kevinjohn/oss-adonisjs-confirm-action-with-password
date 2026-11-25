@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+## 0.6.0 - 2026-11-25
+
+- Require Account Kit `0.8.0` exactly.
 - **Breaking:** The five exceptions with a fixed message (`E_PASSWORD_CONFIRMATION_REQUIRED`,
   `_DENIED`, `_STALE`, `_FORBIDDEN` and `_SESSION_REGISTRY_REQUIRED`) take no constructor arguments.
   A caller can no longer change their `code`, `status` or message; code that passed a message or
