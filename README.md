@@ -172,15 +172,15 @@ export default class PackageCallbacksProvider {
 
 ### Browser example
 
-The [secure-note cookbook](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/blob/26c0d62053bd710a406cc362e883412c4cf13f4d/docs/cookbook/password-confirmation.md)
-shows the complete two-step journey with Account Kit 0.5.1 and Password Confirmations 0.3.1 (no
-example revision pins a later pair yet):
-[Hypermedia](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/hypermedia),
-[Inertia React](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/inertia-react)
-and [Inertia Vue](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/26c0d62053bd710a406cc362e883412c4cf13f4d/apps/inertia-vue).
-Each validates the request, obtains the managed guard's current account input, rejects active
-masquerade and checks its pending note before consuming the proof with the write. The host owns
-request validation, resource checks, same-origin/CSRF protection, routes and response rendering.
+The [secure-note cookbook](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/blob/v0.17.0/docs/cookbook/password-confirmation.md)
+shows the complete two-step journey with Account Kit 0.7.0 and Confirm Action with Password 0.5.0:
+[Hypermedia](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/v0.17.0/apps/hypermedia),
+[Inertia React](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/v0.17.0/apps/inertia-react)
+and [Inertia Vue](https://github.com/Kevinjohn/oss-adonisjs-starter-examples/tree/v0.17.0/apps/inertia-vue).
+Each validates the request, obtains the current account input from `ctx.auth.use('web').current()`,
+rejects active masquerade and checks its durable pending note before consuming the proof with the
+write. The host owns request validation, resource checks, same-origin/CSRF protection, routes and
+response rendering.
 
 ### Spending inside your own `withCurrent`
 
