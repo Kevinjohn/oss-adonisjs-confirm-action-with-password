@@ -11,7 +11,7 @@ import {
   captureChildOutput,
   waitForFile,
   waitForPid,
-} from '../helpers/child_process.js'
+} from '../helpers/child_process.ts'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')

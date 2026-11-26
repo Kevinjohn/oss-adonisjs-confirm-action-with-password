@@ -3,15 +3,16 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { test } from '@japa/runner'
-import { PasswordConfirmations } from '../src/password_confirmations.js'
-import { defineConfig } from '../src/define_config.js'
-import PasswordConfirmationsProvider from '../providers/password_confirmations_provider.js'
-import { bootFixture } from './helpers.js'
+import { PasswordConfirmations } from '../src/password_confirmations.ts'
+import { defineConfig } from '../src/define_config.ts'
+import { PasswordConfirmationAuthorization } from '../src/authorization.ts'
+import PasswordConfirmationsProvider from '../providers/password_confirmations_provider.ts'
+import { bootFixture } from './helpers.ts'
 
 test.group('provider and service', () => {
   test('the container and services/main resolve one PasswordConfirmations from config', async ({
@@ -19,16 +20,15 @@ test.group('provider and service', () => {
   }) => {
     const fixture = await bootFixture()
     try {
-      const fromContainer = await fixture.app.container.make('password_confirmations')
+      const fromContainer = await fixture.app.container.make('password_confirmations.manager')
       assert.instanceOf(fromContainer, PasswordConfirmations)
       assert.equal(fromContainer.windowMs, 5 * 60_000)
-      assert.strictEqual(await fixture.app.container.make(PasswordConfirmations), fromContainer)
       const { default: service } = await import('../services/main.js')
       assert.strictEqual(service, fromContainer)
       // Nothing configured and nothing registered: authorize still allows, as before.
       await fixture.createUser('provider@x.test', 'pw-one-Original-7')
       const input = await fixture.login('provider@x.test', 'pw-one-Original-7')
-      const request = { action: 'a', scope: 's', intent: {}, password: 'pw-one-Original-7' }
+      const request = { operation: 'a', scope: 's', intent: {}, password: 'pw-one-Original-7' }
       const issued = await fromContainer.confirmPassword(input, request)
       assert.isString(issued.confirmationId)
     } finally {
@@ -44,12 +44,15 @@ test.group('provider and service', () => {
       container: {
         singleton: (key: unknown, factory: (resolver: unknown) => Promise<unknown>) =>
           bindingsByKey.set(key, factory),
-        alias: () => {},
         hasBinding: () => false,
       },
     }
     new PasswordConfirmationsProvider(app as never).register()
-    return () => bindingsByKey.get(PasswordConfirmations)!({ make: async () => ({}) })
+    const resolver = {
+      make: async (key: unknown) =>
+        key === PasswordConfirmationAuthorization ? bindingsByKey.get(key)!(resolver) : {},
+    }
+    return () => bindingsByKey.get('password_confirmations.manager')!(resolver)
   }
 
   test('a missing config/password_confirmations.ts is a configuration error', async ({
@@ -90,7 +93,7 @@ test.group('provider and service', () => {
       config: defineConfig({ throttle: false }),
       verifyPassword: async () => true,
     })
-    const request = { action: 'a', scope: 's', intent: {} }
+    const request = { operation: 'a', scope: 's', intent: {} }
     await assert.rejects(
       () => confirmations.confirmPassword({ userId: 1 }, { ...request, password: 'x' }),
       /sessionManagement/

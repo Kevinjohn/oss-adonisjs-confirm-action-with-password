@@ -4,17 +4,17 @@ As a host application developer, I want to provide the service with an authoriza
 
 **Status:** Operator.
 **Access:** Host developer who controls package config or provider boot. Provider registration requires access to the AdonisJS container before the service is first resolved.
-**Entry:** Set `authorize` in `config/password_confirmations.ts` or call `register(factory)` on the `password_confirmations.callbacks` container binding in a host provider's `boot()`.
+**Entry:** Set `authorize` in `config/password_confirmations.ts` or call `register(load)` on the `PasswordConfirmationAuthorization` class binding in a host provider's `boot()`.
 **Documentation:** [Registering callbacks from a provider](../README.md#registering-callbacks-from-a-provider).
-**Source:** [Registry](../src/callback_registry.ts), [provider](../providers/password_confirmations_provider.ts).
-**Coverage:** [Registry integration tests](../tests/callback_registry.spec.ts).
+**Source:** [Authorization](../src/authorization.ts), [provider](../providers/password_confirmations_provider.ts).
+**Coverage:** [Authorization integration tests](../tests/authorization.spec.ts).
 
 ## Acceptance criteria
 
-- The generated config includes `authorize: async () => true`. Remove that setting to supply the authorization callback via the registry. Configure preserves an existing config on reruns.
-- `register(factory)` takes one zero-argument factory that returns `{ authorize? }` synchronously or through a promise. List the host provider before any provider whose `boot()` resolves `PasswordConfirmations`. The registry rejects a second registration and rejects registration after resolution begins. The provider calls the factory at first service resolution and the registry caches that promise, including any rejection.
-- The provider treats an omitted registry `authorize` or a `null` value from untyped code as absent. Service resolution fails with `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` if the registry supplies a non-null, non-undefined value that is not a function or if both sources supply a callback. The service allows the permission check by default when neither source provides a callback.
-- The authorization callback receives `KitContext` and `{ action, scope, intent }`. It runs in the Kit transaction at both issuance stages and during spend. Only literal `true` permits the operation. Use the supplied transaction for reads, leave the intent unchanged and keep the callback safe to rerun.
+- The generated config includes `authorize: async () => true`. Remove that setting to supply the authorization callback via the loader. Configure preserves an existing config on reruns.
+- `register(load)` takes one zero-argument loader that returns the callback or `undefined` synchronously or through a promise. List the host provider before any provider whose `boot()` resolves `PasswordConfirmations`. The class rejects a second registration and rejects registration after resolution begins. The provider calls the loader at first service resolution and the class caches that promise, including any rejection.
+- The provider treats an omitted callback or a `null` value from untyped code as absent. Service resolution fails with `InvalidArgumentsException` if the loader returns a non-null, non-undefined value that is not a function. It fails with `RuntimeException` if both sources supply a callback. The service allows the permission check by default when neither source provides a callback.
+- The authorization callback receives `KitContext` and `{ operation, scope, intent }`. It runs in the Kit transaction at both issuance stages and during spend. Only literal `true` permits the operation. Use the supplied transaction for reads, leave the intent unchanged and keep the callback safe to rerun.
 
 ## User flow
 
@@ -22,10 +22,10 @@ As a host application developer, I want to provide the service with an authoriza
 flowchart TD
     A["Choose where to supply the operation policy"] --> B{"Load policy from config or a host provider?"}
     B -->|Config| C["Set authorize in the package config"]
-    B -->|Provider| D["Remove generated authorize and register factory before service use"]
+    B -->|Provider| D["Remove generated authorize and register loader before service use"]
     C --> E{"Service resolves with the chosen policy?"}
     D --> E
-    E -->|Configuration or factory error| F["Correct registration, provider order or callback and restart"]
+    E -->|configuration or loader error| F["Correct registration, provider order or callback and restart"]
     F --> A
     E -->|Yes| G["Service uses the callback when issuing or spending, or allows by default if absent"]
 ```
@@ -36,20 +36,20 @@ Scope: callback registration and provider merge. Issuance and spending call the 
 
 ```mermaid
 flowchart TD
-    A["PasswordConfirmationsProvider.register binds registry and service singletons"] --> B{"Host provider supplies a factory?"}
-    B -->|Yes| C["Host boot resolves password_confirmations.callbacks; calls register"]
-    C -->|Second or late registration| X["Throw E_PASSWORD_CONFIRMATION_INVALID_CONFIG"]
-    C -->|Accepted| D["Store factory"]
+    A["PasswordConfirmationsProvider.register binds authorization and service singletons"] --> B{"Host provider supplies a loader?"}
+    B -->|Yes| C["Host boot resolves PasswordConfirmationAuthorization; calls register"]
+    C -->|Second or late registration| X["Throw RuntimeException"]
+    C -->|Accepted| D["Store loader"]
     D --> E["First PasswordConfirmations resolution checks config.windowMs"]
     B -->|No| E
     E -->|Missing| X
-    E -->|Present| F["Registry.resolve runs and caches optional factory"]
-    F -->|Factory rejects| Y["Propagate factory error"]
-    F -->|Resolves| G{"Check registry authorize, treating null and undefined as absent"}
+    E -->|Present| F["Authorization.resolve runs and caches optional loader"]
+    F -->|Loader rejects| Y["Propagate loader error"]
+    F -->|Resolves| G{"Check loader result, treating null and undefined as absent"}
     G -->|Non-function value other than null or undefined, or callbacks in both sources| X
-    G -->|Valid registry callback or absent| H["Resolve dependencies; construct service with config.authorize or registry callback"]
+    G -->|Valid loaded callback or absent| H["Resolve dependencies; construct service with config.authorize or loaded callback"]
     H -->|Dependency or construction error| Z["Service resolution rejects"]
     H -->|Success| I["Return PasswordConfirmations for issuance and spending"]
 ```
 
-**Code references:** [Provider merge](../providers/password_confirmations_provider.ts#L32), [registry](../src/callback_registry.ts#L20), [config stub](../stubs/config/password_confirmations.stub), [permission check](../src/password_confirmations.ts#L93).
+**Code references:** [Provider merge](../providers/password_confirmations_provider.ts#L32), [authorization](../src/authorization.ts#L33), [config stub](../stubs/config/password_confirmations.stub), [permission check](../src/password_confirmations.ts#L93).

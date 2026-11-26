@@ -3,13 +3,13 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { createHash } from 'node:crypto'
-import { E_PASSWORD_CONFIRMATION_INVALID_REQUEST } from './errors.js'
-import type { ConfirmationRequest } from './types.js'
+import { E_PASSWORD_CONFIRMATION_INVALID_REQUEST } from './errors.ts'
+import type { ConfirmationRequest } from './types.ts'
 
 const MAX_NAME = 255
 
@@ -32,7 +32,7 @@ function serializeCanonicalIntent(value: unknown, depth = 0): string {
     // Integers past 2^53 have already lost precision, so distinct ids could share a hash; send them
     // as strings. -0 hashes as 0 on purpose: canonical JSON writes both as "0", so a confirmation
     // for one may be spent with the other. Code can still tell them apart (Object.is, 1 / x), so an
-    // action whose meaning depends on the sign must send it as a string.
+    // operation whose meaning depends on the sign must send it as a string.
     if (Number.isInteger(value) && !Number.isSafeInteger(value)) {
       throw new E_PASSWORD_CONFIRMATION_INVALID_REQUEST('unsafe integer; send it as a string')
     }
@@ -65,14 +65,15 @@ function requireBoundedName(value: unknown, field: string) {
   return value
 }
 
-/** Validates a request and returns its normalized binding: action, scope and intent hash. */
+/** Validates a request and returns its normalized binding: operation, scope and intent hash. */
 export function buildConfirmationBinding(request: ConfirmationRequest) {
-  const action = requireBoundedName(request.action, 'action')
+  const operation = requireBoundedName(request.operation, 'operation')
   const scope = requireBoundedName(request.scope, 'scope')
   if (request.intent === undefined)
     throw new E_PASSWORD_CONFIRMATION_INVALID_REQUEST('intent is required')
+  // Preserve the released hash projection for confirmations issued before the API rename.
   const intentHash = createHash('sha256')
-    .update(serializeCanonicalIntent({ action, scope, intent: request.intent }))
+    .update(serializeCanonicalIntent({ action: operation, scope, intent: request.intent }))
     .digest('hex')
-  return { action, scope, intentHash }
+  return { operation, scope, intentHash }
 }

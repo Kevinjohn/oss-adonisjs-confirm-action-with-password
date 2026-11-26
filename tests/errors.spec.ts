@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
@@ -15,7 +15,7 @@ import {
   E_PASSWORD_CONFIRMATION_REQUIRED,
   E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED,
   E_PASSWORD_CONFIRMATION_STALE,
-} from '../src/errors.js'
+} from '../src/errors.ts'
 
 test.group('errors', () => {
   test('fixed exceptions keep their code, status and message when a caller passes options', ({

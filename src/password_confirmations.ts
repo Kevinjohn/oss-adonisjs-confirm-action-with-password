@@ -3,25 +3,25 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { createHash, randomUUID } from 'node:crypto'
+import { RuntimeException } from '@adonisjs/core/exceptions'
 import type { Database } from '@adonisjs/lucid/database'
 import { errors as limiterErrors } from '@adonisjs/limiter'
 import type { Limiter } from '@adonisjs/limiter'
 import type { CurrentAccountInput, Trx, UserId } from '@kevinjohn/adonisjs-account-kit/types'
-import { buildConfirmationBinding } from './intent_hash.js'
+import { buildConfirmationBinding } from './intent_hash.ts'
 import {
   E_PASSWORD_CONFIRMATION_DENIED,
   E_PASSWORD_CONFIRMATION_FORBIDDEN,
   E_PASSWORD_CONFIRMATION_REQUIRED,
   E_PASSWORD_CONFIRMATION_STALE,
   E_PASSWORD_CONFIRMATION_THROTTLED,
-  E_PASSWORD_CONFIRMATION_INVALID_CONFIG,
   E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED,
-} from './errors.js'
+} from './errors.ts'
 import type {
   IssuedConfirmation,
   KitContext,
@@ -30,9 +30,7 @@ import type {
   ResolvedPasswordConfirmationsConfig,
   ConsumeRequest,
   PasswordConfirmationsDependencies,
-} from './types.js'
-
-export type { PasswordConfirmationsDependencies } from './types.js'
+} from './types.ts'
 
 function snapshotCurrentAccount(input: CurrentAccountInput): CurrentAccountInput {
   return {
@@ -56,9 +54,10 @@ function extractAffectedRowCount(result: unknown) {
  *
  * @example
  * ```ts
- * import passwordConfirmations from '@kevinjohn/adonisjs-confirm-action-with-password/services/main'
+ * import { PasswordConfirmations } from '@kevinjohn/adonisjs-confirm-action-with-password'
  *
- * const confirmationWindowMs = passwordConfirmations.windowMs
+ * const confirmations = new PasswordConfirmations(dependencies)
+ * const confirmationWindowMs = confirmations.windowMs
  * ```
  */
 export class PasswordConfirmations {
@@ -78,8 +77,8 @@ export class PasswordConfirmations {
     const throttle = dependencies.config.throttle
     if (throttle) {
       if (!dependencies.limiter) {
-        throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG(
-          'throttle needs @adonisjs/limiter; register its provider or set throttle: false'
+        throw new RuntimeException(
+          'Invalid config/password_confirmations.ts: throttle needs @adonisjs/limiter; register its provider or set throttle: false'
         )
       }
       // No blockDuration here: the store would block again each time a throttled retry crosses the
@@ -99,9 +98,9 @@ export class PasswordConfirmations {
 
   async #assertConfirmationAllowed(context: KitContext, request: ConfirmationRequest) {
     // Host authorisation sees only what the confirmation binds: never the password or confirmation id.
-    const { action, scope, intent } = request
+    const { operation, scope, intent } = request
     const authorize = this.#config.authorize ?? (async () => true)
-    if ((await authorize(context, { action, scope, intent })) !== true) {
+    if ((await authorize(context, { operation, scope, intent })) !== true) {
       throw new E_PASSWORD_CONFIRMATION_FORBIDDEN()
     }
   }
@@ -177,10 +176,11 @@ export class PasswordConfirmations {
    * runs outside any transaction; stage 2 re-runs `withCurrent` with the same `input`, so the Kit
    * re-checks the sign-in and credential revision, and issues only while the window holds.
    *
+   * @throws {AggregateError} The password verifier threw and refunding the reserved attempt also failed.
    * @example
    * ```ts
    * const { confirmationId, expiresAt } = await passwordConfirmations.confirmPassword(input, {
-   *   action: 'transfer-ownership',
+   *   operation: 'transfer-ownership',
    *   scope: companyId,
    *   intent: { toUserId },
    *   password,
@@ -273,7 +273,7 @@ export class PasswordConfirmations {
         user_id: context.account.id,
         sign_in_id: signInId,
         credential_revision: revision,
-        action: binding.action,
+        action: binding.operation,
         scope: binding.scope,
         intent_hash: binding.intentHash,
         verified_at: verifiedAt,
@@ -296,7 +296,7 @@ export class PasswordConfirmations {
    * await kit.authentication.withCurrent(input, async (context) => {
    *   await passwordConfirmations.consume(context, {
    *     confirmationId,
-   *     action: 'transfer-ownership',
+   *     operation: 'transfer-ownership',
    *     scope: companyId,
    *     intent: { toUserId },
    *   })
@@ -319,7 +319,7 @@ export class PasswordConfirmations {
         id: request.confirmationId,
         user_id: context.account.id,
         sign_in_id: signInId,
-        action: binding.action,
+        action: binding.operation,
         scope: binding.scope,
         intent_hash: binding.intentHash,
       })
@@ -345,7 +345,7 @@ export class PasswordConfirmations {
    * ```ts
    * await passwordConfirmations.withConfirmation(
    *   input,
-   *   { confirmationId, action: 'transfer-ownership', scope: companyId, intent: { toUserId } },
+   *   { confirmationId, operation: 'transfer-ownership', scope: companyId, intent: { toUserId } },
    *   async (context) => transferOwnership(context, companyId, toUserId)
    * )
    * ```

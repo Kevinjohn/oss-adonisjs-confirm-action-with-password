@@ -3,11 +3,22 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { Exception } from '@adonisjs/core/exceptions'
+import { ExceptionHandler, type HttpContext } from '@adonisjs/core/http'
+
+class ThrottledExceptionRenderer extends ExceptionHandler {
+  protected debug = false
+
+  render(error: PasswordConfirmationThrottledException, ctx: HttpContext) {
+    return this.renderError(this.toHttpError(error), ctx)
+  }
+}
+
+const throttledExceptionRenderer = new ThrottledExceptionRenderer()
 
 /** The confirmation is missing, spent, expired, or bound to another session, credential or request. */
 export class PasswordConfirmationRequiredException extends Exception {
@@ -39,6 +50,11 @@ export class PasswordConfirmationThrottledException extends Exception {
   constructor(readonly retryAfterSeconds: number) {
     super()
   }
+
+  handle(error: PasswordConfirmationThrottledException, ctx: HttpContext) {
+    ctx.response.header('Retry-After', String(error.retryAfterSeconds))
+    return throttledExceptionRenderer.render(error, ctx)
+  }
 }
 
 /** The window passed between the password check and issue. */
@@ -63,7 +79,7 @@ export class PasswordConfirmationForbiddenException extends Exception {
   }
 }
 
-/** `action`, `scope` or `intent` is malformed. */
+/** `operation`, `scope` or `intent` is malformed. */
 export class InvalidPasswordConfirmationRequestException extends Exception {
   static code = 'E_PASSWORD_CONFIRMATION_INVALID_REQUEST'
   static status = 400
@@ -87,15 +103,6 @@ export class SessionRegistryRequiredException extends Exception {
   }
 }
 
-/** `config/password_confirmations.ts` is missing or invalid. */
-export class InvalidPasswordConfirmationsConfigException extends Exception {
-  static code = 'E_PASSWORD_CONFIRMATION_INVALID_CONFIG'
-  static status = 500
-  constructor(reason: string) {
-    super(`Invalid config/password_confirmations.ts: ${reason}`)
-  }
-}
-
 export const E_PASSWORD_CONFIRMATION_REQUIRED = PasswordConfirmationRequiredException
 export const E_PASSWORD_CONFIRMATION_DENIED = PasswordConfirmationDeniedException
 export const E_PASSWORD_CONFIRMATION_THROTTLED = PasswordConfirmationThrottledException
@@ -103,4 +110,3 @@ export const E_PASSWORD_CONFIRMATION_STALE = PasswordConfirmationStaleException
 export const E_PASSWORD_CONFIRMATION_FORBIDDEN = PasswordConfirmationForbiddenException
 export const E_PASSWORD_CONFIRMATION_INVALID_REQUEST = InvalidPasswordConfirmationRequestException
 export const E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED = SessionRegistryRequiredException
-export const E_PASSWORD_CONFIRMATION_INVALID_CONFIG = InvalidPasswordConfirmationsConfigException

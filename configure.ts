@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
@@ -14,10 +14,8 @@ import type Configure from '@adonisjs/core/commands/configure'
 import { RuntimeException } from '@adonisjs/core/exceptions'
 import { sourceFiles } from '@adonisjs/lucid/utils'
 import type { DatabaseConfig } from '@adonisjs/lucid/types/database'
-import { isSqlIdentifier } from './src/sql_identifier.js'
-
-/** The package's stub directory, next to this file in source and in `build/`. */
-export const stubsRoot = fileURLToPath(new URL('./stubs/', import.meta.url))
+import { isSqlIdentifier } from './src/sql_identifier.ts'
+import { stubsRoot } from './stubs/main.ts'
 
 const userIdColumns: Record<string, string> = {
   integer: `table.integer('user_id').unsigned()`,
@@ -93,6 +91,14 @@ async function resolveMigrationSettings(command: Configure) {
  * confirmations migration and registers the provider. Never overwrites existing files. Flags match
  * Account Kit's: `--users-table` and `--user-id-type` (`integer`, `string` or `uuid`), plus
  * `--table` for the confirmations table, written to both the migration and the config.
+ *
+ * @throws {RuntimeException} An existing config or migration path cannot be inspected safely.
+ * @example
+ * ```ts
+ * import { configure } from '@kevinjohn/adonisjs-confirm-action-with-password'
+ *
+ * await configure(command)
+ * ```
  */
 export async function configure(command: Configure) {
   const usersTable = String(command.parsedFlags['users-table'] ?? 'users')
@@ -240,7 +246,7 @@ export async function configure(command: Configure) {
         tableName,
         usersTable,
         userIdColumn: userIdColumns[userIdType],
-        destination,
+        path: relative(command.app.migrationsPath(), destination),
       },
     })
   }

@@ -9,7 +9,7 @@ import {
   planChangedChecks,
   type ChangedFile,
   type PlannedCheckStep,
-} from '../../bin/check_changed_plan.js'
+} from '../../bin/check_changed_plan.ts'
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 
@@ -124,6 +124,13 @@ test('formatter configuration checks the whole tree', ({ assert }) => {
       ['pnpm', 'format:check'],
       path
     )
+})
+
+test('a change to the stub root module selects lint, typecheck and build', ({ assert }) => {
+  const steps = listRunnableSteps(planChangedChecks(makeChangedPaths('stubs/main.ts')))
+  assert.property(steps, 'lint')
+  assert.property(steps, 'typecheck')
+  assert.property(steps, 'build')
 })
 
 test('lint allows no warnings and skips files ESLint ignores', async ({ assert }) => {

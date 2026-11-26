@@ -3,14 +3,14 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { readFile } from 'node:fs/promises'
 import { test } from '@japa/runner'
-import type { Fixture } from './helpers.js'
-import { bootFixture } from './helpers.js'
+import type { Fixture } from './helpers.ts'
+import { bootFixture } from './helpers.ts'
 
 /**
  * Canary for the two Account Kit tables this package reads. If any of these fail after a

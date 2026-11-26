@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
@@ -34,7 +34,7 @@ export type KitContext = CurrentAccountContext
 /** The operation a password confirmation is bound to, not a grant of resource permission. */
 export interface ConfirmationRequest {
   /** A stable operation name, such as `transfer-ownership`. */
-  action: string
+  operation: string
   /** The resource key the operation applies to, such as a company id. */
   scope: string
   /**
@@ -95,7 +95,7 @@ export interface PasswordConfirmationsConfig {
    * spending. Default allows; anything other than literal `true` refuses. Use
    * `context.trx` only, no side effects: it runs at both issuance stages, at spend, and again on a
    * retry. Treat `request.intent` as read-only. May instead come from
-   * `password_confirmations.callbacks`, but not from both.
+   * `PasswordConfirmationAuthorization`, but not from both.
    */
   authorize?: AuthorizeConfirmation
   /**
@@ -127,8 +127,6 @@ export interface ResolvedPasswordConfirmationsConfig {
   throttle: false | ConfirmationThrottle
 }
 
-/** What the application registers through `password_confirmations.callbacks`. */
-export interface PasswordConfirmationCallbacks {
-  /** As `PasswordConfirmationsConfig.authorize`; set it in one place only. */
-  authorize?: AuthorizeConfirmation
-}
+/** Loads an authorization callback when the confirmation service is first resolved. */
+export type LoadConfirmationAuthorization = () =>
+  AuthorizeConfirmation | undefined | Promise<AuthorizeConfirmation | undefined>

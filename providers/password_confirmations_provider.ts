@@ -3,57 +3,47 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
+import { RuntimeException } from '@adonisjs/core/exceptions'
 import type { ApplicationService } from '@adonisjs/core/types'
 import { AccountKit } from '@kevinjohn/adonisjs-account-kit'
-import { PasswordConfirmations } from '../src/password_confirmations.js'
-import { PasswordConfirmationCallbackRegistry } from '../src/callback_registry.js'
-import { E_PASSWORD_CONFIRMATION_INVALID_CONFIG } from '../src/errors.js'
-import type { ResolvedPasswordConfirmationsConfig } from '../src/types.js'
+import { PasswordConfirmations } from '../src/password_confirmations.ts'
+import { PasswordConfirmationAuthorization } from '../src/authorization.ts'
+import type { ResolvedPasswordConfirmationsConfig } from '../src/types.ts'
 
 declare module '@adonisjs/core/types' {
   interface ContainerBindings {
-    'password_confirmations': PasswordConfirmations
-    'password_confirmations.callbacks': PasswordConfirmationCallbackRegistry
+    'password_confirmations.manager': PasswordConfirmations
   }
 }
 
-/**
- * Registers `PasswordConfirmations` (alias `password_confirmations`) built from
- * `config/password_confirmations.ts` and the callbacks registered through
- * `PasswordConfirmationCallbackRegistry` (alias `password_confirmations.callbacks`).
- */
+/** Registers the confirmation service and the authorization loader used by host providers. */
 export default class PasswordConfirmationsProvider {
   constructor(protected app: ApplicationService) {}
 
   register() {
-    const callbackRegistry = new PasswordConfirmationCallbackRegistry()
-    this.app.container.singleton(PasswordConfirmationCallbackRegistry, () => callbackRegistry)
-    this.app.container.alias(
-      'password_confirmations.callbacks',
-      PasswordConfirmationCallbackRegistry
+    this.app.container.singleton(
+      PasswordConfirmationAuthorization,
+      () => new PasswordConfirmationAuthorization()
     )
-    this.app.container.singleton(PasswordConfirmations, async (resolver) => {
+    this.app.container.singleton('password_confirmations.manager', async (resolver) => {
       const config = this.app.config.get<ResolvedPasswordConfirmationsConfig | undefined>(
         'password_confirmations'
       )
       if (!config?.windowMs) {
-        throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG('export default defineConfig({...})')
+        throw new RuntimeException(
+          'Invalid config/password_confirmations.ts: export default defineConfig({...})'
+        )
       }
-      const callbacks = await callbackRegistry.resolve()
-      const authorize = callbacks?.authorize ?? undefined
-      if (authorize !== undefined) {
-        if (config.authorize) {
-          throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG(
-            'authorize is set in both the config and password_confirmations.callbacks'
-          )
-        }
-        if (typeof authorize !== 'function') {
-          throw new E_PASSWORD_CONFIRMATION_INVALID_CONFIG('authorize must be a function')
-        }
+      const authorization = await resolver.make(PasswordConfirmationAuthorization)
+      const authorize = await authorization.resolve()
+      if (authorize !== undefined && config.authorize) {
+        throw new RuntimeException(
+          'Invalid config/password_confirmations.ts: authorize is set in both the config and PasswordConfirmationAuthorization'
+        )
       }
       const hash = await resolver.make('hash')
       // Without the limiter provider, let the constructor explain the throttle requirement.
@@ -69,6 +59,5 @@ export default class PasswordConfirmationsProvider {
         verifyPassword: (hashed, password) => hash.verify(hashed, password),
       })
     })
-    this.app.container.alias('password_confirmations', PasswordConfirmations)
   }
 }

@@ -3,25 +3,25 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { createHash } from 'node:crypto'
 import { createServer } from 'node:http'
 import { once } from 'node:events'
-import { ExceptionHandler, type HttpContext } from '@adonisjs/core/http'
+import { ExceptionHandler } from '@adonisjs/core/http'
 import { test } from '@japa/runner'
 import type { Limiter } from '@adonisjs/limiter'
-import { PasswordConfirmations } from '../src/password_confirmations.js'
-import { E_PASSWORD_CONFIRMATION_THROTTLED } from '../src/errors.js'
-import { defineConfig } from '../src/define_config.js'
-import type { ConfirmationThrottle, PasswordConfirmationsConfig } from '../src/types.js'
-import type { Fixture } from './helpers.js'
-import { bootFixture, readCallResult } from './helpers.js'
+import { PasswordConfirmations } from '../src/password_confirmations.ts'
+import { E_PASSWORD_CONFIRMATION_THROTTLED } from '../src/errors.ts'
+import { defineConfig } from '../src/define_config.ts'
+import type { ConfirmationThrottle, PasswordConfirmationsConfig } from '../src/types.ts'
+import type { Fixture } from './helpers.ts'
+import { bootFixture, readCallResult } from './helpers.ts'
 
 const PW = 'pw-one-Original-7'
-const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
+const request = { operation: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
 
 let fixture: Fixture
 let users = 0
@@ -29,18 +29,6 @@ async function signInTestUser() {
   const email = `throttled-${++users}@x.test`
   await fixture.createUser(email, PW)
   return { email, input: await fixture.login(email, PW) }
-}
-
-// The README's host integration, with production-style rendering even in the test app.
-class HostExceptionHandler extends ExceptionHandler {
-  protected debug = false
-
-  async handle(error: unknown, ctx: HttpContext) {
-    if (error instanceof E_PASSWORD_CONFIRMATION_THROTTLED) {
-      ctx.response.header('Retry-After', String(error.retryAfterSeconds))
-    }
-    return super.handle(error, ctx)
-  }
 }
 
 /** Resolves `reached` once `markArrival()` has been called `count` times: a stage announcing itself. */
@@ -112,14 +100,14 @@ test.group('Wrong-password throttling', (group) => {
   })
   group.each.timeout(60_000)
 
-  test('host handler forwards Retry-After while preserving negotiated HTTP errors', async ({
+  test('throttled exception sends Retry-After while preserving negotiated HTTP errors', async ({
     assert,
   }) => {
     const confirmations = fixture.makePasswordConfirmations({ throttle: { requests: 1 } })
     const { input } = await signInTestUser()
     const server = await fixture.app.container.make('server')
-    server.errorHandler(async () => ({ default: HostExceptionHandler }))
     let actualRetryAfter: number | undefined
+    server.errorHandler(async () => ({ default: ExceptionHandler }))
     server.getRouter().post('/confirm', async () => {
       try {
         return await confirmations.confirmPassword(input, { ...request, password: 'nope' })
@@ -142,7 +130,7 @@ test.group('Wrong-password throttling', (group) => {
       const denied = await send('application/json')
       assert.equal(denied.status, 403)
       assert.isNull(denied.headers.get('retry-after'))
-      await denied.json()
+      await denied.arrayBuffer()
 
       for (const accept of ['application/json', 'application/vnd.api+json']) {
         const response = await send(accept)
@@ -339,13 +327,13 @@ test.group('Wrong-password throttling', (group) => {
     )
   })
 
-  test('the budget is per account across actions and scopes', async ({ assert }) => {
+  test('the budget is per account across operations and scopes', async ({ assert }) => {
     const confirmations = fixture.makePasswordConfirmations({ throttle: { requests: 3 } })
     const { input } = await signInTestUser()
     for (const changed of [
-      { ...request, action: 'import' },
+      { ...request, operation: 'import' },
       { ...request, scope: 'company-2' },
-      { ...request, action: 'anonymise', intent: {} },
+      { ...request, operation: 'anonymise', intent: {} },
     ]) {
       assert.equal(
         await readCallResult(

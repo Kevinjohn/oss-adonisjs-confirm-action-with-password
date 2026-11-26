@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+- **Breaking:** Pass `operation` instead of `action` to `confirmPassword`, `consume` and
+  `withConfirmation`. Update any host request validation or mapping that forwards that field and
+  destructure `operation` in `authorize` callbacks. Existing confirmation rows, stored `action`
+  values and canonical intent hashes need no migration.
+- **Breaking:** Resolve the confirmation singleton as `password_confirmations.manager` in the
+  container. Replace lookups by the old `password_confirmations` name or the
+  `PasswordConfirmations` class. Imports from `/services/main` and direct construction still work.
+- **Breaking:** In host providers, import `PasswordConfirmationAuthorization` from the package root
+  and pass the class to `app.container.make`. This replaces both
+  `PasswordConfirmationCallbackRegistry` and `password_confirmations.callbacks`. Pass
+  `register(() => authorize)` or `register(async () => authorize)` instead of returning
+  `{ authorize }`. A loader with no callback returns `undefined`. Replace
+  `PasswordConfirmationCallbacks` with `LoadConfirmationAuthorization` for the loader or
+  `AuthorizeConfirmation` for the callback itself.
+- **Breaking:** Replace catches for `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` or
+  `InvalidPasswordConfirmationsConfigException` with the framework exceptions from
+  `@adonisjs/core/exceptions`. `defineConfig` and a loader returning a non-function throw
+  `InvalidArgumentsException`. Missing provider config, a missing limiter, conflicting authorization
+  sources, and duplicate or late registration throw `RuntimeException`.
+- Remove any host exception handler branch that only adds `Retry-After` for
+  `E_PASSWORD_CONFIRMATION_THROTTLED`. The exception now sets the header and renders the negotiated
+  429 itself. Its `retryAfterSeconds` property remains available.
+
 ## 0.6.0 - 2026-11-25
 
 - Require Account Kit `0.8.0` exactly.
