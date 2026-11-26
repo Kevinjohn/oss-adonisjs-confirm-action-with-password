@@ -18,12 +18,13 @@
   `AuthorizeConfirmation` for the callback itself.
 - **Breaking:** Replace catches for `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` or
   `InvalidPasswordConfirmationsConfigException` with the framework exceptions from
-  `@adonisjs/core/exceptions`. `defineConfig` and a loader returning a non-function throw
-  `InvalidArgumentsException`. Missing provider config, a missing limiter, conflicting authorization
-  sources, and duplicate or late registration throw `RuntimeException`.
-- Remove any host exception handler branch that only adds `Retry-After` for
+  `@adonisjs/core/exceptions`. `defineConfig`, a non-function loader passed to `register`, and a loader
+  returning an invalid callback throw `InvalidArgumentsException`. Missing provider config, a missing
+  limiter, conflicting authorization sources, and duplicate or late registration throw `RuntimeException`.
+- **Breaking for custom 429 rendering:** Remove any host exception handler branch that only adds `Retry-After` for
   `E_PASSWORD_CONFIRMATION_THROTTLED`. The exception now sets the header and renders the negotiated
-  429 itself. Its `retryAfterSeconds` property remains available.
+  429 itself. To preserve a custom 429 renderer or status page, handle this exception before calling
+  `super.handle()` and set `Retry-After` from its `retryAfterSeconds` property.
 
 ## 0.6.0 - 2026-11-25
 

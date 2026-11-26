@@ -84,6 +84,18 @@ test.group('PasswordConfirmationAuthorization', () => {
     }
   }).timeout(30_000)
 
+  test('rejects a non-function loader without consuming registration', async ({ assert }) => {
+    const authorization = new PasswordConfirmationAuthorization()
+    assert.throws(
+      () => authorization.register(true as never),
+      InvalidArgumentsException,
+      /authorize loader must be a function/
+    )
+    const authorize = async () => false
+    authorization.register(() => authorize)
+    assert.strictEqual(await authorization.resolve(), authorize)
+  })
+
   test('authorize in both the config and the loader throws naming it', async ({ assert }) => {
     const fixture = await bootWith({ authorize: async () => true })
     try {

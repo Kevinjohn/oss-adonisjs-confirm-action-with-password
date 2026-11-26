@@ -38,6 +38,7 @@ export class PasswordConfirmationAuthorization {
   /**
    * Registers a loader before the confirmation service is first resolved.
    *
+   * @throws {InvalidArgumentsException} The loader is not a function.
    * @throws {RuntimeException} A loader was already registered or resolution has started.
    * @example
    * ```ts
@@ -54,6 +55,11 @@ export class PasswordConfirmationAuthorization {
     }
     if (this.#load) {
       throw new RuntimeException('Password confirmation authorize is already registered')
+    }
+    if (typeof load !== 'function') {
+      throw new InvalidArgumentsException(
+        'Password confirmation authorize loader must be a function'
+      )
     }
     this.#load = load
   }

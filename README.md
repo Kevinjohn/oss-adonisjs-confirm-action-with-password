@@ -367,7 +367,9 @@ service configuration, such as a missing config file, throws `RuntimeException`.
 Account Kit's `E_ACCOUNT_KIT_INVALID_SESSION` passes through unchanged: sign the user out.
 
 The throttled exception sets `Retry-After` and renders the 429 through AdonisJS’s negotiated error
-renderer. Non-HTTP callers can read the exception's `retryAfterSeconds` property.
+renderer. To use a custom 429 renderer or status page, handle the exception before calling
+`super.handle()` and set `Retry-After` from its `retryAfterSeconds` property. Non-HTTP callers can
+read the same property.
 
 `E_ACCOUNT_KIT_POST_COMMIT` (`error.committed === true`) also passes through. The transaction
 committed before it was thrown: from `withConfirmation` the confirmation is spent and your `run`
