@@ -39,6 +39,7 @@ flowchart TD
     A["PasswordConfirmationsProvider.register binds authorization and service singletons"] --> B{"Host provider supplies a loader?"}
     B -->|Yes| C["Host boot resolves PasswordConfirmationAuthorization; calls register"]
     C -->|Second or late registration| X["Throw RuntimeException"]
+    C -->|Loader is not a function| V["Throw InvalidArgumentsException"]
     C -->|Accepted| D["Store loader"]
     D --> E["First PasswordConfirmations resolution checks config.windowMs"]
     B -->|No| E
@@ -46,7 +47,8 @@ flowchart TD
     E -->|Present| F["Authorization.resolve runs and caches optional loader"]
     F -->|Loader rejects| Y["Propagate loader error"]
     F -->|Resolves| G{"Check loader result, treating null and undefined as absent"}
-    G -->|Non-function value other than null or undefined, or callbacks in both sources| X
+    G -->|Non-function value other than null or undefined| V
+    G -->|Callbacks in both sources| X
     G -->|Valid loaded callback or absent| H["Resolve dependencies; construct service with config.authorize or loaded callback"]
     H -->|Dependency or construction error| Z["Service resolution rejects"]
     H -->|Success| I["Return PasswordConfirmations for issuance and spending"]

@@ -30,13 +30,13 @@ flowchart TD
 
 ## Code flow
 
-Scope: package limiter-enabled path after the first `withCurrent` stage. The exception hands off to the [host exception handler](../README.md#errors), and a correct password resumes [issuance at stage two](US-CONFIRM-01-issue-confirmation.md#code-flow).
+Scope: package limiter-enabled path after the first `withCurrent` stage. The exception handles its negotiated response through the [HTTP exception handler](../README.md#errors), and a correct password resumes [issuance at stage two](US-CONFIRM-01-issue-confirmation.md#code-flow).
 
 ```mermaid
 flowchart TD
     A["confirmPassword: build account throttle keys"] --> B{"reserveAttempt: active block or exhausted budget?"}
     B -->|Yes| C["Throw E_PASSWORD_CONFIRMATION_THROTTLED"]
-    C --> D["Hand off retryAfterSeconds to host exception handler"]
+    C --> D["Exception handle sets Retry-After and renders negotiated 429"]
     B -->|Limiter fault| L["Propagate limiter error"]
     B -->|No, reserved| E{"Password verification outcome?"}
     E -->|Wrong| F{"recordPasswordFailure reaches requests?"}

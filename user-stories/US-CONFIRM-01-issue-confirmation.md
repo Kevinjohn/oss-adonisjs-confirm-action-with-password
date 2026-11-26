@@ -3,9 +3,9 @@
 As a signed-in account holder, I want to confirm my password for a named sensitive operation so that the application can require recent proof before it changes important data.
 
 **Status:** Current, for a current Account Kit session with session management enabled.
-**Access:** Account Kit session sign-in with a server-side session store (the cookie store keeps a copied session alive after sign-out, so the sign-out guarantee in [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md) needs a server-side store; [README requirements](../README.md#requirements)); access tokens are refused because they have no sign-in row. Kit also applies its configured `canAccess` policy; this path does not independently require verified email. The host must reject foreign-origin issuance requests before invoking the service.
+**Access:** Account Kit session sign-in with a server-side session store (the cookie store keeps a copied session alive after sign-out, so the sign-out guarantee in [US-CONFIRM-03](US-CONFIRM-03-revoke-confirmations.md) needs a server-side store; [README host rules](../README.md#supported-adonisjs-versions)); access tokens are refused because they have no sign-in row. Kit also applies its configured `canAccess` policy; this path does not independently require verified email. The host must reject foreign-origin issuance requests before invoking the service.
 **Entry:** Host-owned issuance endpoint calls `passwordConfirmations.confirmPassword(input, request)`; the package has no HTTP control.
-**Documentation:** [README usage and host requirements](../README.md#use)
+**Documentation:** [README usage and host requirements](../README.md#usage)
 **Source:** [`PasswordConfirmations.confirmPassword`](../src/password_confirmations.ts)
 **Coverage:** [`tests/password_confirmations.spec.ts`](../tests/password_confirmations.spec.ts)
 
