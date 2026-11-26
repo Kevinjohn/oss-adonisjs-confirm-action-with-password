@@ -142,7 +142,9 @@ test('lint allows no warnings and skips files ESLint ignores', async ({ assert }
   const manifest = JSON.parse(await readFile(join(repoRoot, 'package.json'), 'utf8'))
   assert.include(manifest.scripts.lint, '--max-warnings 0')
   assert.notProperty(
-    listRunnableSteps(planChangedChecks(makeChangedPaths('examples/consumer/app/x.ts'))),
+    listRunnableSteps(
+      planChangedChecks(makeChangedPaths('tests/fixtures/packed_consumer/host.ts'))
+    ),
     'lint'
   )
 })
