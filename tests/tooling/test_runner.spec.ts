@@ -5,7 +5,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { test } from '@japa/runner'
-import { collectExit, captureChildOutput } from '../helpers/child_process.js'
+import { collectExit, captureChildOutput } from '../helpers/child_process.ts'
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..')
 

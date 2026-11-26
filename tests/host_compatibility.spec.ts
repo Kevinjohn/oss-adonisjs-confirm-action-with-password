@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { createHash } from 'node:crypto'
 import { test } from '@japa/runner'
-import type { Fixture } from './helpers.js'
-import { bootFixture, readCallResult } from './helpers.js'
+import type { Fixture } from './helpers.ts'
+import { bootFixture, readCallResult } from './helpers.ts'
 
 const PW = 'pw-one-Original-7'
-const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
+const request = { operation: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
 let fixture: Fixture
 let users = 0
 
@@ -35,7 +35,7 @@ test.group('host database compatibility', (group) => {
     const { id, input } = await signInTestUser()
     assert.isString(id)
     assert.match(String(id), /^[a-f0-9-]{36}$/)
-    const confirmations = await fixture.app.container.make('password_confirmations')
+    const confirmations = await fixture.app.container.make('password_confirmations.manager')
     const scopeA = randomUUID()
     const scopeB = randomUUID()
     await fixture.db.table('accounts').insert([{ id: scopeA }, { id: scopeB }])
@@ -83,7 +83,7 @@ test.group('host database compatibility', (group) => {
     const { email, input } = await signInTestUser()
     const secondSignIn = await fixture.login(email, PW)
     const other = await signInTestUser()
-    const confirmations = await fixture.app.container.make('password_confirmations')
+    const confirmations = await fixture.app.container.make('password_confirmations.manager')
     const manager = await fixture.app.container.make('limiter.manager')
     const budget = manager.use({ requests: 5, duration: '1 minute' })
     const keys = buildThrottleKeys(input.userId)
@@ -131,8 +131,8 @@ test.group('host database compatibility', (group) => {
       const { email, input } = await signInTestUser()
       const peerInput = await peer.login(email, PW)
       const other = await signInTestUser()
-      const first = await fixture.app.container.make('password_confirmations')
-      const second = await peer.app.container.make('password_confirmations')
+      const first = await fixture.app.container.make('password_confirmations.manager')
+      const second = await peer.app.container.make('password_confirmations.manager')
       assert.notStrictEqual(
         await fixture.app.container.make('limiter.manager'),
         await peer.app.container.make('limiter.manager')

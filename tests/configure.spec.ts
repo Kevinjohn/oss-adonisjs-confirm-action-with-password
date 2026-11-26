@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
@@ -13,9 +13,9 @@ import { join, sep } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { test } from '@japa/runner'
 import type Configure from '@adonisjs/core/commands/configure'
-import { configure } from '../configure.js'
+import { configure } from '../configure.ts'
 import { MigrationRunner } from '@adonisjs/lucid/migration'
-import { bootFixture, prepareConfiguredAppRoot } from './helpers.js'
+import { bootFixture, prepareConfiguredAppRoot } from './helpers.ts'
 
 /** Lightweight command for inspection-only failures: no host packages or codemods are needed. */
 function inspectionCommand(root: string, database?: unknown) {
@@ -28,7 +28,7 @@ function inspectionCommand(root: string, database?: unknown) {
     app: {
       config: database === undefined ? undefined : { get: () => database },
       configPath: (name: string) => join(root, 'config', name),
-      migrationsPath: () => join(root, 'host/migrations'),
+      migrationsPath: (...paths: string[]) => join(root, 'host/migrations', ...paths),
       appRoot: pathToFileURL(root + sep),
       import: (specifier: string) => import(specifier),
     },
@@ -42,10 +42,10 @@ function inspectionCommand(root: string, database?: unknown) {
       makeUsingStub: async (
         _root: string,
         stub: string,
-        data: { migration?: { destination: string } }
+        data: { migration?: { path: string } }
       ) => {
         stubs.push(stub)
-        if (data.migration) migrations.push(data.migration.destination)
+        if (data.migration) migrations.push(join(root, 'host/migrations', data.migration.path))
       },
       updateRcFile: async (callback: (rcFile: { addProvider: (path: string) => void }) => void) => {
         callback({ addProvider: (path) => providers.push(path) })
@@ -58,40 +58,35 @@ function inspectionCommand(root: string, database?: unknown) {
 test.group('configure', () => {
   test('publishes config, one migration and one provider, and is idempotent', async ({
     assert,
+    fs,
   }) => {
-    const { root, ignitor } = await prepareConfiguredAppRoot()
-    try {
-      const listMigrationNames = async () => {
-        const files = await readdir(join(root, 'database/migrations'))
-        return files.filter((file) => file.endsWith('_create_password_confirmations_table.ts'))
-      }
-      assert.lengthOf(await listMigrationNames(), 1)
-      const [migrationFile] = await listMigrationNames()
-      const migration = await readFile(join(root, 'database/migrations', migrationFile), 'utf8')
-      assert.include(
-        migration,
-        `table.integer('user_id').unsigned().notNullable().references('id').inTable('users')`
-      )
-      assert.include(migration, `.inTable('account_sessions').onDelete('CASCADE')`)
-      assert.include(migration, `protected tableName = 'password_confirmations'`)
-      assert.include(migration, `table.index(['user_id'])`)
-      assert.include(migration, `table.index(['consumed_at'])`)
-      assert.include(
-        await readFile(join(root, 'config/password_confirmations.ts'), 'utf8'),
-        `window: '5m'`
-      )
-      const rc = await readFile(join(root, 'adonisrc.ts'), 'utf8')
-      assert.lengthOf(
-        rc.match(/adonisjs-confirm-action-with-password\/password_confirmations_provider/g) ?? [],
-        1
-      )
-
-      await ignitor.ace().handle(['configure', '@kevinjohn/adonisjs-confirm-action-with-password'])
-      assert.lengthOf(await listMigrationNames(), 1)
-      assert.equal(await readFile(join(root, 'adonisrc.ts'), 'utf8'), rc)
-    } finally {
-      await rm(root, { recursive: true, force: true })
+    const { ignitor } = await prepareConfiguredAppRoot(false, fs.basePath)
+    const listMigrationNames = async () => {
+      const files = await fs.readDir('database/migrations')
+      return files.filter(({ path }) => path.endsWith('_create_password_confirmations_table.ts'))
     }
+    const migrations = await listMigrationNames()
+    assert.lengthOf(migrations, 1)
+    const [migrationFile] = migrations
+    const migration = await fs.contents(join('database/migrations', migrationFile.path))
+    assert.include(
+      migration,
+      `table.integer('user_id').unsigned().notNullable().references('id').inTable('users')`
+    )
+    assert.include(migration, `.inTable('account_sessions').onDelete('CASCADE')`)
+    assert.include(migration, `protected tableName = 'password_confirmations'`)
+    assert.include(migration, `table.index(['user_id'])`)
+    assert.include(migration, `table.index(['consumed_at'])`)
+    assert.include(await fs.contents('config/password_confirmations.ts'), `window: '5m'`)
+    const rc = await fs.contents('adonisrc.ts')
+    assert.lengthOf(
+      rc.match(/adonisjs-confirm-action-with-password\/password_confirmations_provider/g) ?? [],
+      1
+    )
+
+    await ignitor.ace().handle(['configure', '@kevinjohn/adonisjs-confirm-action-with-password'])
+    assert.lengthOf(await listMigrationNames(), 1)
+    assert.equal(await fs.contents('adonisrc.ts'), rc)
   }).timeout(30_000)
 
   test('--table and --users-table name the migration tables and the config together', async ({

@@ -3,12 +3,12 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { test } from '@japa/runner'
-import { bootFixture } from './helpers.js'
+import { bootFixture } from './helpers.ts'
 
 test('the real Kit with access tokens gives no sign-in row, so confirmations refuse', async ({
   assert,
@@ -24,7 +24,7 @@ test('the real Kit with access tokens gives no sign-in row, so confirmations ref
     // The Kit accepts the token: this is a valid signed-in caller.
     await fixture.kit.authentication.current(input)
     const confirmations = fixture.makePasswordConfirmations()
-    const request = { action: 'a', scope: 's', intent: {} }
+    const request = { operation: 'a', scope: 's', intent: {} }
     for (const attempt of [
       confirmations.confirmPassword(input, { ...request, password: 'pw-one-Original-7' }),
       confirmations.withConfirmation(input, { ...request, confirmationId: 'p' }, async () => {}),

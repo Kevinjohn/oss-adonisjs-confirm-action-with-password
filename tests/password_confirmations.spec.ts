@@ -3,22 +3,22 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { randomUUID } from 'node:crypto'
 import { test } from '@japa/runner'
-import type { Fixture } from './helpers.js'
-import { bootFixture, readCallResult, makeSessionGuard } from './helpers.js'
-import type { ConfirmationRequest } from '../src/types.js'
-import { PasswordConfirmations } from '../src/password_confirmations.js'
-import { defineConfig } from '../src/define_config.js'
+import type { Fixture } from './helpers.ts'
+import { bootFixture, readCallResult, makeSessionGuard } from './helpers.ts'
+import type { ConfirmationRequest } from '../src/types.ts'
+import { PasswordConfirmations } from '../src/password_confirmations.ts'
+import { defineConfig } from '../src/define_config.ts'
 
 const PW = 'pw-one-Original-7'
 const PW2 = 'Correct-Horse-9-battery'
 const request: ConfirmationRequest = {
-  action: 'transfer-ownership',
+  operation: 'transfer-ownership',
   scope: 'company-1',
   intent: { toUserId: 'u2' },
 }
@@ -149,7 +149,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.8.0', (group) => {
     )
   })
 
-  test('binds to action, scope and the exact intent', async ({ assert }) => {
+  test('binds to operation, scope and the exact intent', async ({ assert }) => {
     const confirmations = fixture.makePasswordConfirmations()
     const { input } = await signInTestUser()
     const { confirmationId } = await confirmations.confirmPassword(input, {
@@ -157,7 +157,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.8.0', (group) => {
       password: PW,
     })
     for (const changed of [
-      { ...request, action: 'import' },
+      { ...request, operation: 'import' },
       { ...request, scope: 'company-2' },
       { ...request, intent: { toUserId: 'u3' } },
     ]) {

@@ -4,7 +4,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { test } from '@japa/runner'
-import { collectExit, captureChildOutput, waitForPid } from '../helpers/child_process.js'
+import { collectExit, captureChildOutput, waitForPid } from '../helpers/child_process.ts'
 
 async function directory(cleanup: (callback: () => void | Promise<void>) => void): Promise<string> {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'confirm-action-wait-for-pid-'))

@@ -11,30 +11,31 @@ protected change. It proves recent password confirmation, not permission to acce
 
 > Pre-release. Installed from GitHub releases; not published to npm.
 
-## Requirements
-
-| Need          | Detail                                                                                                                               |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| Node.js       | 24 or later                                                                                                                          |
-| Account Kit   | exactly `0.8.0` for the live credential revision API (see below)                                                                     |
-| Sign-in       | Account Kit `authentication.strategy: 'session'` with `sessionManagement` enabled; access tokens give no sign-in row and are refused |
-| Session store | server-side (memory in tests, database or Redis); the cookie store keeps a copied session alive after sign-out                       |
-| Assembler     | `@adonisjs/assembler` 8.x in the host's development dependencies for the configure codemods                                          |
-| Limiter store | shared (database or Redis) when the app runs more than one process; the memory store counts per process                              |
-| Database      | SQLite (tested). PostgreSQL is expected to work but is untested                                                                      |
-
 ## Install
+
+Install and configure [Account Kit 0.8.0](https://github.com/Kevinjohn/oss-adonisjs-account-kit/releases/tag/v0.8.0)
+first, with session authentication and `sessionManagement` enabled. Install `@adonisjs/assembler` 8.x as a
+host development dependency.
+
+For packages published to a registry, `node ace add @kevinjohn/adonisjs-confirm-action-with-password`
+would install the package and run its configure hook. This package is distributed as a GitHub
+release archive, so install the archive and run the hook in two steps.
 
 ```sh
 pnpm add https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/releases/download/v0.6.0/kevinjohn-adonisjs-confirm-action-with-password-0.6.0.tgz
 node ace configure @kevinjohn/adonisjs-confirm-action-with-password   # --users-table, --user-id-type as for Account Kit
-node ace migration:run
 ```
+
+Run `node ace migration:run` after both packages have been configured. Usage below describes the
+upcoming API. For the installed archive, see the
+[0.6.0 README](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.6.0/README.md).
 
 If the original confirmations-table migration has already run, add a new migration in your host
 application using the [0.2.0 schema upgrade](CHANGELOG.md#upgrade-the-confirmations-table-from-011). Run it before
 deploying 0.2.0 or later. The upgrade clears existing confirmations, so users may be asked to
 confirm their password again.
+
+## What the configure hook changes
 
 `configure` writes `config/password_confirmations.ts`, one migration and registers the provider. It uses
 the primary Lucid connection's single configured migration path, or AdonisJS's migration directory
@@ -80,11 +81,25 @@ Configure recognises an existing confirmations migration by its file name only
 another (a consolidated baseline, for example) must not rerun configure: it would find none and
 write a second migration creating the same table, which then fails when it runs.
 
+## Configuration
+
+Edit `config/password_confirmations.ts` after running the configure hook. Call `defineConfig` to
+validate the inputs and fill in defaults.
+
+| Option                | Default or purpose                                                                                                             |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `window`              | `'5m'`; how long the confirmation is spendable after the password check                                                        |
+| `table`, `usersTable` | `password_confirmations` and `users`; keep them aligned with the migration                                                     |
+| `readPasswordHash`    | Reads `usersTable.password` with the supplied Account Kit transaction; override for a custom users adapter                     |
+| `verifyPassword`      | Uses the app hash service; override to verify another hash format                                                              |
+| `authorize`           | Allows by default; supply a callback to check the requested resource in the Account Kit transaction                            |
+| `throttle`            | Five failed checks per account per minute, followed by a 20-minute block; `false` gives the host responsibility for throttling |
+
 ## User stories
 
 See the [user story catalogue](https://github.com/Kevinjohn/oss-adonisjs-confirm-action-with-password/blob/v0.6.0/user-stories/README.md) for the source-reviewed capabilities and boundaries.
 
-## Use
+## Usage
 
 ```ts
 import passwordConfirmations from '@kevinjohn/adonisjs-confirm-action-with-password/services/main'
@@ -92,7 +107,7 @@ import { errors } from '@kevinjohn/adonisjs-confirm-action-with-password'
 
 // POST /confirmations: password -> confirmation
 const { confirmationId, expiresAt } = await passwordConfirmations.confirmPassword(input, {
-  action: 'transfer-ownership',
+  operation: 'transfer-ownership',
   scope: companyId,
   intent: { toUserId },
   password,
@@ -101,7 +116,7 @@ const { confirmationId, expiresAt } = await passwordConfirmations.confirmPasswor
 // POST /transfers: spend and change in one Account Kit transaction
 await passwordConfirmations.withConfirmation(
   input,
-  { confirmationId, action: 'transfer-ownership', scope: companyId, intent: { toUserId } },
+  { confirmationId, operation: 'transfer-ownership', scope: companyId, intent: { toUserId } },
   async ({ account, trx }) => {
     const owned = await trx
       .from('companies')
@@ -120,7 +135,7 @@ auth integration, the one you already pass to `kit.authentication.current`. Adon
 owns the actual guard names (for example, `web`). Never construct this input from untrusted request
 fields. Schedule `passwordConfirmations.prune()` to delete spent and expired rows.
 
-Host vocabulary maps to the published API: the operation name is `action`, the resource key is
+Host vocabulary maps to the API: the operation name is `operation`, the resource key is
 `scope`, the request contents are `intent`, and spending the proof means `consume` or
 `withConfirmation`. The canonical hash wrapper and stored `action`/`scope` columns retain those
 names; `confirmationId` and issued deadlines remain unchanged.
@@ -133,15 +148,15 @@ returns normally commits the spend even when its update changed no row.
 
 ```ts
 // config/password_confirmations.ts: refused at both issuance stages and at spend
-authorize: async ({ account, trx }, { action, scope }) => {
-  if (action !== 'transfer-ownership') return false
+authorize: async ({ account, trx }, { operation, scope }) => {
+  if (operation !== 'transfer-ownership') return false
   const company = await trx.from('companies').where({ id: scope, owner_id: account.id }).first()
   return Boolean(company)
 },
 ```
 
-`authorize` may come from the callback registry instead of the config file; set it in one place
-only, or resolving the service throws `E_PASSWORD_CONFIRMATION_INVALID_CONFIG` naming `authorize`.
+Set `authorize` in the config file or register a loader from a host provider. Supplying both
+throws a `RuntimeException` naming `authorize` when the confirmation service resolves.
 
 ### Registering callbacks from a provider
 
@@ -156,15 +171,16 @@ register `authorize` here.
 ```ts
 // providers/package_callbacks_provider.ts, listed in adonisrc.ts
 import type { ApplicationService } from '@adonisjs/core/types'
+import { PasswordConfirmationAuthorization } from '@kevinjohn/adonisjs-confirm-action-with-password'
 
 export default class PackageCallbacksProvider {
   constructor(protected app: ApplicationService) {}
 
   async boot() {
-    const callbacks = await this.app.container.make('password_confirmations.callbacks')
-    callbacks.register(async () => {
+    const authorization = await this.app.container.make(PasswordConfirmationAuthorization)
+    authorization.register(async () => {
       const { authorizePasswordConfirmation } = await import('#services/password_confirmation')
-      return { authorize: authorizePasswordConfirmation }
+      return authorizePasswordConfirmation
     })
   }
 }
@@ -188,7 +204,7 @@ response rendering.
 await kit.authentication.withCurrent(input, async (context) => {
   await passwordConfirmations.consume(context, {
     confirmationId,
-    action: 'transfer-ownership',
+    operation: 'transfer-ownership',
     scope: companyId,
     intent: { toUserId },
   })
@@ -342,36 +358,40 @@ or check its `code` against the corresponding value below.
 | `E_PASSWORD_CONFIRMATION_THROTTLED`                 | 429    | Too many wrong passwords; `retryAfterSeconds` says when to retry            |
 | `E_PASSWORD_CONFIRMATION_STALE`                     | 403    | The window passed between the password check and issue                      |
 | `E_PASSWORD_CONFIRMATION_FORBIDDEN`                 | 403    | Host authorisation callback did not return literal `true`                   |
-| `E_PASSWORD_CONFIRMATION_INVALID_REQUEST`           | 400    | Malformed `action`, `scope` or `intent` (JSON values only)                  |
+| `E_PASSWORD_CONFIRMATION_INVALID_REQUEST`           | 400    | Malformed `operation`, `scope` or `intent` (JSON values only)               |
 | `E_PASSWORD_CONFIRMATION_SESSION_REGISTRY_REQUIRED` | 500    | No Kit sign-in row: wrong strategy or `sessionManagement` off               |
-| `E_PASSWORD_CONFIRMATION_INVALID_CONFIG`            | 500    | `config/password_confirmations.ts` missing or invalid                       |
+
+Invalid options passed to `defineConfig` throw AdonisJS’s `InvalidArgumentsException`. Invalid
+service configuration, such as a missing config file, throws `RuntimeException`.
 
 Account Kit's `E_ACCOUNT_KIT_INVALID_SESSION` passes through unchanged: sign the user out.
 
-AdonisJS's default exception handler preserves the 429 status but does not forward
-`retryAfterSeconds` as a header. In your host exception handler, add a `Retry-After` header before
-delegating to your existing renderer; this keeps JSON, JSON:API, HTML and custom handling under
-the host's control. Non-HTTP callers can still read the exception's `retryAfterSeconds` property.
-
-```ts
-import { ExceptionHandler, type HttpContext } from '@adonisjs/core/http'
-import { errors } from '@kevinjohn/adonisjs-confirm-action-with-password'
-
-export default class HttpExceptionHandler extends ExceptionHandler {
-  async handle(error: unknown, ctx: HttpContext) {
-    if (error instanceof errors.E_PASSWORD_CONFIRMATION_THROTTLED) {
-      ctx.response.header('Retry-After', String(error.retryAfterSeconds))
-    }
-    return super.handle(error, ctx)
-  }
-}
-```
+The throttled exception sets `Retry-After` and renders the 429 through AdonisJS’s negotiated error
+renderer. To use a custom 429 renderer or status page, handle the exception before calling
+`super.handle()` and set `Retry-After` from its `retryAfterSeconds` property. Non-HTTP callers can
+read the same property.
 
 `E_ACCOUNT_KIT_POST_COMMIT` (`error.committed === true`) also passes through. The transaction
 committed before it was thrown: from `withConfirmation` the confirmation is spent and your `run`
 writes are stored, so do not ask for a new confirmation and repeat the operation; check what was
 stored. From `confirmPassword` a confirmation was issued but its id was lost: ask the user to
 confirm again, and the orphan expires on its own. Every other error rolled back.
+
+## Supported AdonisJS versions
+
+| Need          | Detail                                                                                                                               |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| AdonisJS      | 7.x                                                                                                                                  |
+| Node.js       | 24 or later                                                                                                                          |
+| Account Kit   | exactly `0.8.0` for the live credential revision API (see below)                                                                     |
+| Sign-in       | Account Kit `authentication.strategy: 'session'` with `sessionManagement` enabled; access tokens give no sign-in row and are refused |
+| Session store | server-side (memory in tests, database or Redis); the cookie store keeps a copied session alive after sign-out                       |
+| Assembler     | `@adonisjs/assembler` 8.x in the host's development dependencies for the configure codemods                                          |
+| Limiter store | shared (database or Redis) when the app runs more than one process; the memory store counts per process                              |
+| Database      | SQLite (tested). PostgreSQL is expected to work but is untested                                                                      |
+
+The supported Account Kit dependency is the published `0.8.0` archive. Compatibility with
+Account Kit’s unreleased branch has not been established.
 
 ## What ends a confirmation
 

@@ -3,18 +3,18 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { test } from '@japa/runner'
 import type { CurrentAccountInput } from '@kevinjohn/adonisjs-account-kit/types'
-import type { Fixture } from './helpers.js'
-import { bootFixture, readCallResult, makeSessionGuard } from './helpers.js'
+import type { Fixture } from './helpers.ts'
+import { bootFixture, readCallResult, makeSessionGuard } from './helpers.ts'
 
 const PW = 'pw-one-Original-7'
 const PW2 = 'Correct-Horse-9-battery'
-const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
+const request = { operation: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
 const DEAD = ['E_PASSWORD_CONFIRMATION_REQUIRED', 'E_ACCOUNT_KIT_INVALID_SESSION']
 
 let fixture: Fixture

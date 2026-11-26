@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
@@ -21,9 +21,9 @@ import { AccountKit, defineConfig as defineKitConfig } from '@kevinjohn/adonisjs
 import { createSqlUsersAdapter } from '@kevinjohn/adonisjs-account-kit/adapters/sql'
 import { captureNotifications } from '@kevinjohn/adonisjs-account-kit/testing/notifications'
 import { defineConfig as defineLimiterConfig, stores } from '@adonisjs/limiter'
-import { PasswordConfirmations } from '../src/password_confirmations.js'
-import { defineConfig } from '../src/define_config.js'
-import type { PasswordConfirmationsConfig } from '../src/types.js'
+import { PasswordConfirmations } from '../src/password_confirmations.ts'
+import { defineConfig } from '../src/define_config.ts'
+import type { PasswordConfirmationsConfig } from '../src/types.ts'
 
 const packageRoot = new URL('../', import.meta.url)
 const self = '@kevinjohn/adonisjs-confirm-action-with-password'
@@ -64,8 +64,10 @@ export default class extends BaseSchema {
 `
 
 /** A fresh AdonisJS app root with a users migration, then both packages' `node ace configure`. */
-export async function prepareConfiguredAppRoot(hostProfile = false) {
-  const root = await mkdtemp(join(tmpdir(), 'adonisjs-confirm-action-with-password-'))
+export async function prepareConfiguredAppRoot(hostProfile = false, scratchRoot?: string) {
+  const root =
+    scratchRoot ?? (await mkdtemp(join(tmpdir(), 'adonisjs-confirm-action-with-password-')))
+  await mkdir(root, { recursive: true })
   await writeFile(
     join(root, 'package.json'),
     '{"type":"module","devDependencies":{"@adonisjs/assembler":"8.6.0"}}'

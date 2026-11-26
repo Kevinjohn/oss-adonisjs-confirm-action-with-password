@@ -3,13 +3,13 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
 import { test } from '@japa/runner'
-import { defineConfig } from '../src/define_config.js'
-import { E_PASSWORD_CONFIRMATION_INVALID_CONFIG } from '../src/errors.js'
+import { defineConfig } from '../src/define_config.ts'
+import { InvalidArgumentsException } from '@adonisjs/core/exceptions'
 
 /** Runs `defineConfig` with a value its types forbid, as an untyped host config would. */
 function defineUntyped(config: unknown) {
@@ -21,7 +21,7 @@ function refusal(config: unknown) {
   try {
     defineUntyped(config)
   } catch (error) {
-    if (error instanceof E_PASSWORD_CONFIRMATION_INVALID_CONFIG) return error
+    if (error instanceof InvalidArgumentsException) return error
     throw error
   }
   throw new Error('defineConfig accepted the config')
@@ -97,7 +97,12 @@ test.group('defineConfig', () => {
   })
 
   test('refuses a config that is not an object', ({ assert }) => {
-    assert.match(refusal(null).message, /the config must be an object/)
+    for (const input of [null, []]) {
+      assert.match(
+        refusal(input).message,
+        /Invalid config\/password_confirmations.ts: the config must be an object/
+      )
+    }
   })
 
   test('refuses table names that are not strings', ({ assert }) => {

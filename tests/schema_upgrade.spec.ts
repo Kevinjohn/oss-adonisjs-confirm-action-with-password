@@ -2,7 +2,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { MigrationRunner } from '@adonisjs/lucid/migration'
 import { test } from '@japa/runner'
-import { bootFixture } from './helpers.js'
+import { bootFixture } from './helpers.ts'
 
 test('the documented upgrade adds expiry after the 0.1.1 create migration ran', async ({
   assert,
@@ -52,7 +52,11 @@ test('the documented upgrade adds expiry after the 0.1.1 create migration ran', 
     await fixture.createUser(email, password)
     const input = await fixture.login(email, password)
     const confirmations = fixture.makePasswordConfirmations()
-    const request = { action: 'transfer-ownership', scope: 'company-1', intent: { toUserId: 'u2' } }
+    const request = {
+      operation: 'transfer-ownership',
+      scope: 'company-1',
+      intent: { toUserId: 'u2' },
+    }
     const { confirmationId, expiresAt } = await confirmations.confirmPassword(input, {
       ...request,
       password,

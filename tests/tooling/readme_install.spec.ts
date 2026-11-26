@@ -3,7 +3,7 @@
  *
  * (c) 2026 Kevinjohn Gallagher
  *
- * For the full copyright and license information, please view the LICENSE
+ * For the full copyright and license information, please view the LICENSE.md
  * file that was distributed with this source code.
  */
 
@@ -27,7 +27,7 @@ test('README links resolve from the packed archive or name this release', async 
   const manifest = JSON.parse(await readFile('package.json', 'utf8'))
   const readme = await readFile('README.md', 'utf8')
   // What the archive holds beside the README: package.json `files` plus what pnpm always packs.
-  const packed = ['build/', 'CHANGELOG.md', 'LICENSE', 'package.json']
+  const packed = ['build/', 'CHANGELOG.md', 'LICENSE.md', 'package.json']
   const relative = [...readme.matchAll(/\]\((?!https?:|#)([^)#\s]+)/g)].map(([, target]) => target)
   for (const target of relative) {
     assert.isTrue(

@@ -181,7 +181,7 @@ try {
   const kit = await app.container.make(AccountKit)
   const hash = await app.container.make('hash')
   const limiter = await app.container.make('limiter.manager')
-  const service = await app.container.make('password_confirmations')
+  const service = await app.container.make('password_confirmations.manager')
   const { default: publicService } =
     await import('@kevinjohn/adonisjs-confirm-action-with-password/services/main')
   type ServiceIsTyped = AssertNotAny<IsAny<typeof publicService>>
@@ -189,7 +189,6 @@ try {
   type DependencyConfigIsTyped = AssertNotAny<IsAny<PasswordConfirmationsDependencies['config']>>
   assert.ok(service instanceof PasswordConfirmations)
   assert.equal(service, publicService)
-  assert.equal(service, await app.container.make(PasswordConfirmations))
   assert.equal(service.windowMs, generatedConfig.windowMs)
 
   // Exercise the exported dependency types and an inferred callback result in each compiler lane.
@@ -219,7 +218,7 @@ try {
     }
   )
   const request: ConfirmationRequest = {
-    action: 'write',
+    operation: 'write',
     scope: 'example',
     intent: { label: 'packed' },
   }
