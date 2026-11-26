@@ -89,7 +89,10 @@ for (const compiler of ['5.9.3', '6.0.3']) {
         ],
       })
     )
-    await copyFile(join(repository, 'examples/packed-consumer/host.ts'), join(host, 'host.ts'))
+    await copyFile(
+      join(repository, 'tests/fixtures/packed_consumer/host.ts'),
+      join(host, 'host.ts')
+    )
     const run = (command, args) => execFileSync(command, args, { cwd: host, env, stdio: 'inherit' })
     run('pnpm', ['install', '--no-frozen-lockfile', '--prefer-offline'])
     run('pnpm', ['list', '--depth', '0'])
