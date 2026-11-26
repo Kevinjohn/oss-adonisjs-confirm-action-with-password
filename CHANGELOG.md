@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Releases reuse the successful `checks.yml` push or manual run for the exact commit on `main` before
+  building and validating the release archive.
+
 - **Breaking:** Pass `operation` instead of `action` to `confirmPassword`, `consume` and
   `withConfirmation`. Update any host request validation or mapping that forwards that field and
   destructure `operation` in `authorize` callbacks. Existing confirmation rows, stored `action`
