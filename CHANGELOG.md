@@ -9,8 +9,9 @@
 
 - **Breaking:** Pass `operation` instead of `action` to `confirmPassword`, `consume` and
   `withConfirmation`, destructure `operation` in `authorize` callbacks, and rename the
-  confirmations table column from `action` to `operation`. Existing databases need a migration
-  renaming the column; canonical intent hashes remain unchanged.
+  confirmations table column from `action` to `operation` with the
+  [upgrade migration below](#upgrade-the-confirmations-table-from-060). Issued confirmations and
+  canonical intent hashes remain unchanged.
 - **Breaking:** Resolve the confirmation singleton as `password_confirmations.manager` in the
   container. Replace lookups by the old `password_confirmations` name or the
   `PasswordConfirmations` class. Imports from `/services/main` and direct construction still work.
@@ -30,6 +31,33 @@
   `E_PASSWORD_CONFIRMATION_THROTTLED`. The exception now sets the header and renders the negotiated
   429 itself. To preserve a custom 429 renderer or status page, handle this exception before calling
   `super.handle()` and set `Retry-After` from its `retryAfterSeconds` property.
+
+### Upgrade the confirmations table from 0.6.0
+
+Create a new migration in your host application with a timestamp after the original confirmations
+migration. Set `tableName` to the configured `table` if you use a custom name. Run
+`node ace migration:run` as you deploy this release: the earlier release cannot issue or spend
+confirmations once the column is renamed, and this release cannot before it.
+
+```ts
+import { BaseSchema } from '@adonisjs/lucid/schema'
+
+export default class extends BaseSchema {
+  protected tableName = 'password_confirmations'
+
+  async up() {
+    this.schema.alterTable(this.tableName, (table) => {
+      table.renameColumn('action', 'operation')
+    })
+  }
+
+  async down() {
+    this.schema.alterTable(this.tableName, (table) => {
+      table.renameColumn('operation', 'action')
+    })
+  }
+}
+```
 
 ## 0.6.0 - 2026-11-25
 
