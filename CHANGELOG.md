@@ -8,9 +8,9 @@
   building and validating the release archive.
 
 - **Breaking:** Pass `operation` instead of `action` to `confirmPassword`, `consume` and
-  `withConfirmation`. Update any host request validation or mapping that forwards that field and
-  destructure `operation` in `authorize` callbacks. Existing confirmation rows, stored `action`
-  values and canonical intent hashes need no migration.
+  `withConfirmation`, destructure `operation` in `authorize` callbacks, and rename the
+  confirmations table column from `action` to `operation`. Existing databases need a migration
+  renaming the column; canonical intent hashes remain unchanged.
 - **Breaking:** Resolve the confirmation singleton as `password_confirmations.manager` in the
   container. Replace lookups by the old `password_confirmations` name or the
   `PasswordConfirmations` class. Imports from `/services/main` and direct construction still work.

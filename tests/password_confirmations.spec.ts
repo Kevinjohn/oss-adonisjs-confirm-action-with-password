@@ -114,7 +114,7 @@ test.group('PasswordConfirmations lifecycle on Account Kit 0.8.0', (group) => {
         user_id: context.account.id,
         sign_in_id: context.signInId,
         credential_revision: await context.readCredentialRevision(),
-        action: 'transfer-ownership',
+        operation: 'transfer-ownership',
         scope: 'company-1',
         // Released 0.2.2 canonical JSON: {"action":"transfer-ownership","intent":{"toUserId":"u2"},"scope":"company-1"}
         intent_hash: 'cff407e017da38c92a15707b2553a65ac1fcfc27e38f029ea3091ef916052c64',
