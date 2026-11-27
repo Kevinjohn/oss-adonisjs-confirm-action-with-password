@@ -3,7 +3,7 @@
 As an application operator, I want to install the provider and storage so that confirmation operations can run with their Account Kit dependencies.
 
 **Status:** Operator.
-**Access:** Application operator configures Account Kit first, using Assembler for codemods, registers package provider and runs migrations. Configure does not detect the session store; the application needs a server-side session store for the sign-out guarantee ([US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md), [README requirements](../README.md#requirements)).
+**Access:** Application operator configures Account Kit first, using Assembler for codemods, registers package provider and runs migrations. Configure does not detect the session store; the application needs a server-side session store for the sign-out guarantee ([US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md), [README host rules](../README.md#supported-adonisjs-versions)).
 **Entry:** `node ace configure @kevinjohn/adonisjs-confirm-action-with-password`.
 **Documentation:** [Install](../README.md#install)
 **Source:** [`configure`](../configure.ts)
@@ -77,7 +77,7 @@ flowchart TD
     P --> E
     M --> E["Register provider"]
     E --> F{"At app configuration load, defineConfig validates option types, window, identifiers and throttle?"}
-    F -->|No| G2
+    F -->|No| V["InvalidArgumentsException; config load fails"]
     F -->|Yes| G{"Config has windowMs on singleton resolution?"}
     G -->|No| G2["RuntimeException; service not constructed"]
     G -->|Yes| R3["Resolve authorisation configuration as in US-CONFIRM-09"]

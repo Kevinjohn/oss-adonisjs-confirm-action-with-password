@@ -5,7 +5,7 @@ As an application operator, I want to remove spent and expired confirmations so 
 **Status:** Operator.
 **Access:** Application scheduler/operator invokes the public service's `prune()` method.
 **Entry:** Host scheduler calls `passwordConfirmations.prune()`; no package command or scheduler is provided.
-**Documentation:** [README use](../README.md#use)
+**Documentation:** [README use](../README.md#usage)
 **Source:** [`PasswordConfirmations.prune`](../src/password_confirmations.ts)
 **Coverage:** [`tests/password_confirmations.spec.ts`](../tests/password_confirmations.spec.ts)
 

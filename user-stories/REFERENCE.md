@@ -2,7 +2,7 @@
 
 ## Actors and boundaries
 
-- **Signed-in account holder**: an application user whose current Account Kit sign-in is represented by `CurrentAccountInput`. The package supports Account Kit 0.8.0 with the session strategy with session management on a server-side session store ([README requirements](../README.md#requirements)); access-token authentication has no registered sign-in row and is refused.
+- **Signed-in account holder**: an application user whose current Account Kit sign-in is represented by `CurrentAccountInput`. The package supports Account Kit 0.8.0 with the session strategy with session management on a server-side session store ([README host rules](../README.md#supported-adonisjs-versions)); access-token authentication has no registered sign-in row and is refused.
 - **Host application**: owns routes, request validation, same-origin/CSRF defences, UI, operation/resource naming (`operation`/`scope`), authorisation in [`authorize`](US-CONFIRM-09-register-authorization.md), the exact `intent`, and any throttle route when package throttling is disabled. The package does not provide a browser UI or endpoints.
 - **Operator**: installs/configures the provider and migration, supplies host callbacks, and schedules pruning.
 
@@ -14,7 +14,7 @@
 - Issuance, spending and pruning: [`src/password_confirmations.ts`](../src/password_confirmations.ts).
 - Account Kit 0.8.0 [current account and sign-in checks](https://github.com/Kevinjohn/oss-adonisjs-account-kit/blob/42e6c06929baaa01f0c4810e2b9afae2e9953d7d/src/authentication.ts#L55-L88), [transaction and post-commit handling](https://github.com/Kevinjohn/oss-adonisjs-account-kit/blob/42e6c06929baaa01f0c4810e2b9afae2e9953d7d/src/transaction.ts#L182-L199): `withCurrent` checks the live sign-in, revision and configured `canAccess`; it does not itself call `requireActive`. The host owns any additional verified-email policy.
 - Account Kit session and credential invalidation integration: package contract and evidence in [README](../README.md#what-ends-a-confirmation) and [`tests/revocation.spec.ts`](../tests/revocation.spec.ts).
-- User instructions: [README usage and host rules](../README.md#use), [throttling and origin guidance](../README.md#rules-the-host-must-keep). No interactive guide or built-in route exists.
+- User instructions: [README usage and host rules](../README.md#usage), [throttling and origin guidance](../README.md#rules-the-host-must-keep). No interactive guide or built-in route exists.
 
 Status records source availability, not test execution. `Current` means the API can be called when the stated Account Kit and host conditions hold; tests are linked as evidence only.
 

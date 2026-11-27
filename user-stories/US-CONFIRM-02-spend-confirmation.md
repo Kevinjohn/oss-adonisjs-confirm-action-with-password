@@ -5,7 +5,7 @@ As a signed-in account holder, I want the application to spend my confirmation w
 **Status:** Current, through the same Account Kit `withCurrent` transaction.
 **Access:** A server-side session store is required (see [US-CONFIRM-01](US-CONFIRM-01-issue-confirmation.md)). The confirmation must belong to the current account and sign-in and match `operation`, `scope`, canonical intent hash, live credential revision, and expiry. If configured, the [host authorisation callback](US-CONFIRM-09-register-authorization.md) runs again. The host owns resource access.
 **Entry:** Host protected operation calls `withConfirmation(input, request, run)`, or calls `consume(context, request)` inside its own `withCurrent` callback.
-**Documentation:** [README use](../README.md#use)
+**Documentation:** [README use](../README.md#usage)
 **Source:** [`withConfirmation` and `consume`](../src/password_confirmations.ts)
 **Coverage:** [`tests/password_confirmations.spec.ts`](../tests/password_confirmations.spec.ts)
 

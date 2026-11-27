@@ -1,6 +1,6 @@
 # User story catalogue
 
-Source reviewed against `1d395da718343012cd29c1864fe0c3ce7dec2e66` (0.4.1), with Account Kit 0.6.1 pinned by the package. The catalogue covers account-holder, host and release-maintainer journeys. Test links identify executable evidence.
+Source reviewed against `072030d2f71fab4c057fc341ea0eb6258a9baa45` (unreleased main), with Account Kit 0.8.0 pinned by the package. The catalogue covers account-holder, host and release-maintainer journeys. Test links identify executable evidence.
 
 ## Index
 
