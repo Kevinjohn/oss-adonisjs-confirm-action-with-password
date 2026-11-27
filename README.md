@@ -383,7 +383,7 @@ confirm again, and the orphan expires on its own. Every other error rolled back.
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | AdonisJS      | 7.x                                                                                                                                  |
 | Node.js       | 24 or later                                                                                                                          |
-| Account Kit   | exactly `0.8.0` for the live credential revision API (see below)                                                                     |
+| Account Kit   | `^0.8.0` (verified on `0.8.0`, see below)                                                                                            |
 | Sign-in       | Account Kit `authentication.strategy: 'session'` with `sessionManagement` enabled; access tokens give no sign-in row and are refused |
 | Session store | server-side (memory in tests, database or Redis); the cookie store keeps a copied session alive after sign-out                       |
 | Assembler     | `@adonisjs/assembler` 8.x in the host's development dependencies for the configure codemods                                          |

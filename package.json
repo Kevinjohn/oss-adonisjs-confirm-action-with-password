@@ -114,7 +114,7 @@
     "@adonisjs/limiter": "^3.0.0",
     "@adonisjs/lucid": "^22.4.2",
     "@adonisjs/session": "^8.1.0",
-    "@kevinjohn/adonisjs-account-kit": "0.8.0",
+    "@kevinjohn/adonisjs-account-kit": "^0.8.0",
     "@vinejs/vine": "^4.4.0",
     "typescript": "^5.9.3 || ^6.0.3"
   },
