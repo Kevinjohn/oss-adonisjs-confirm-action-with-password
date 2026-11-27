@@ -273,7 +273,7 @@ export class PasswordConfirmations {
         user_id: context.account.id,
         sign_in_id: signInId,
         credential_revision: revision,
-        action: binding.operation,
+        operation: binding.operation,
         scope: binding.scope,
         intent_hash: binding.intentHash,
         verified_at: verifiedAt,
@@ -319,7 +319,7 @@ export class PasswordConfirmations {
         id: request.confirmationId,
         user_id: context.account.id,
         sign_in_id: signInId,
-        action: binding.operation,
+        operation: binding.operation,
         scope: binding.scope,
         intent_hash: binding.intentHash,
       })

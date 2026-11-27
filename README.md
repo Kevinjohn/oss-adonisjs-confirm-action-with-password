@@ -35,6 +35,10 @@ application using the [0.2.0 schema upgrade](CHANGELOG.md#upgrade-the-confirmati
 deploying 0.2.0 or later. The upgrade clears existing confirmations, so users may be asked to
 confirm their password again.
 
+If you are upgrading from 0.6.0 or earlier, also add the
+[0.6.0 schema upgrade](CHANGELOG.md#upgrade-the-confirmations-table-from-060), which renames the
+`action` column to `operation`. Without it, every confirmation fails with a missing-column error.
+
 ## What the configure hook changes
 
 `configure` writes `config/password_confirmations.ts`, one migration and registers the provider. It uses
@@ -137,8 +141,9 @@ fields. Schedule `passwordConfirmations.prune()` to delete spent and expired row
 
 Host vocabulary maps to the API: the operation name is `operation`, the resource key is
 `scope`, the request contents are `intent`, and spending the proof means `consume` or
-`withConfirmation`. The canonical hash wrapper and stored `action`/`scope` columns retain those
-names; `confirmationId` and issued deadlines remain unchanged.
+`withConfirmation`. The stored columns are `operation` and `scope`, while the canonical hash
+wrapper retains its `action`/`scope`/`intent` keys; `confirmationId` and issued deadlines remain
+unchanged.
 
 A confirmation proves the account recently confirmed its password for that request, not that it may
 access `scope`. The host authorisation callback `authorize` defaults to allow; only literal `true`
