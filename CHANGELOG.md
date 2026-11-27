@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Declare `@kevinjohn/adonisjs-account-kit` as a `^0.8.0` caret peer range instead of an exact pin
+  and retire the `PKG-7` convention departure.
 - Releases reuse the successful `checks.yml` push or manual run for the exact commit on `main` before
   building and validating the release archive.
 

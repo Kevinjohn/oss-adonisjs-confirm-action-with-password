@@ -45,7 +45,11 @@ test.group('Account Kit coupling canary', (group) => {
       SUPPORTED_KIT,
       `KIT COUPLING: installed Account Kit ${manifest.version}, verified ${SUPPORTED_KIT}. Re-run this canary and the revocation suite before changing the pin.`
     )
-    assert.equal(peer, SUPPORTED_KIT, 'KIT COUPLING: peer pin and verified Kit version differ')
+    assert.equal(
+      peer,
+      `^${SUPPORTED_KIT}`,
+      'KIT COUPLING: peer range and verified Kit version differ'
+    )
   })
 
   test('the Kit tables still have every column the package reads', async ({ assert }) => {
